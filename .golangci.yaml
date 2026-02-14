@@ -10,6 +10,7 @@ linters:
     - depguard
     - exhaustruct
     - wsl
+    - nolintlint
 
   exclusions:
     generated: strict
