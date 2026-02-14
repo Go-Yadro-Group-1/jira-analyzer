@@ -22,7 +22,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "Jira-analyzer",
 	Short: "Jira Analyzer is analyzer service for Jira tasks",
-	Long:  "Jira Analyzer need config file, that contains information about DB, Gateway service, and app configuration.\n You can check config file in config path",
+	Long:  "Jira Analyzer need config file, that contains information about DB, Gateway service, and app configuration.\nYou can check config file in config path",
 }
 
 func Execute() error {
