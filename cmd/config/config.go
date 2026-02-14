@@ -1,6 +1,3 @@
-/*
-Copyright © 2026 German-Feskov
-*/
 package config
 
 import (
@@ -11,31 +8,30 @@ import (
 )
 
 type Config struct {
-	DB  DBConfig  `mapstructure:"db" validate:"required"`
+	DB  DBConfig  `mapstructure:"db"  validate:"required"`
 	App AppConfig `mapstructure:"app" validate:"required"`
 }
 
 type DBConfig struct {
-	Host     string `mapstructure:"host" validate:"required,hostname|ip"`
-	Port     int    `mapstructure:"port" validate:"required,min=1,max=65535"`
-	User     string `mapstructure:"user" validate:"required,min=1"`
+	Host     string `mapstructure:"host"     validate:"required,hostname|ip"`
+	Port     int    `mapstructure:"port"     validate:"required,min=1,max=65535"`
+	User     string `mapstructure:"user"     validate:"required,min=1"`
 	Password string `mapstructure:"password" validate:"required,min=1"`
-	DBName   string `mapstructure:"dbname" validate:"required,min=1"`
-	SSLMode  string `mapstructure:"sslmode" validate:"required,oneof=disable require verify-ca verify-full"`
+	DBName   string `mapstructure:"dbname"   validate:"required,min=1"`
+	SSLMode  string `mapstructure:"sslmode"  validate:"required,oneof=disable require verify-ca verify-full"`
 }
 
-// TODO add some vars
 type AppConfig struct {
 	LogLevel string `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
 }
 
-//TODO add config for gRPC
-
+// nolint: gochecknoglobals
 var (
 	appConfig *Config
 	validate  *validator.Validate
 )
 
+// nolint: gochecknoinits
 func init() {
 	validate = validator.New()
 }
@@ -43,19 +39,23 @@ func init() {
 func LoadConfig() (*Config, error) {
 	var cfg Config
 
-	if err := viper.Unmarshal(&cfg); err != nil {
+	err := viper.Unmarshal(&cfg)
+	if err != nil {
 		return nil, fmt.Errorf("unable to decode config: %w", err)
 	}
 
-	if err := validate.Struct(&cfg); err != nil {
+	err = validate.Struct(&cfg)
+	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	if err := cfg.customValidate(); err != nil {
+	err = cfg.customValidate()
+	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
 	appConfig = &cfg
+
 	return &cfg, nil
 }
 
@@ -63,11 +63,11 @@ func GetConfig() *Config {
 	if appConfig == nil {
 		panic("config not loaded")
 	}
+
 	return appConfig
 }
 
 func (c *Config) customValidate() error {
-	// Example of custom validation, TODO edit
 	return nil
 }
 
