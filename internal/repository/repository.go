@@ -1,7 +1,6 @@
 package repository
 
-type Repository struct {
-}
+type Repository struct{}
 
 func New() *Repository {
 	return &Repository{}
