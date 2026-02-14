@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,24 +16,43 @@ const (
 	defaultConfigType = "yaml"
 )
 
+// nolint: gochecknoglobals
 var (
-	cfgFile string
+	cfgFile    string
+	ErrService = errors.New("error on initialize service")
 )
 
+// nolint: gochecknoglobals
 var rootCmd = &cobra.Command{
 	Use:   "Jira-analyzer",
 	Short: "Jira Analyzer is analyzer service for Jira tasks",
-	Long:  "Jira Analyzer need config file, that contains information about DB, Gateway service, and app configuration.\nYou can check config file in config path",
+	Long: `Jira Analyzer need config file,
+that contains information about DB,
+Gateway service, and app configuration.\n
+You can check config file in config path`,
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrService, err)
+	}
+
+	return nil
 }
 
+// nolint: gochecknoinits
 func init() {
 	cobra.OnInitialize(initConfig)
-	configMsg := fmt.Sprintf("default config is $%s/%s.%s", defaultConfigDir, defaultConfigName, defaultConfigType)
+
+	configMsg := fmt.Sprintf(
+		"default config is $%s/%s.%s",
+		defaultConfigDir,
+		defaultConfigName,
+		defaultConfigType,
+	)
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", configMsg)
+
 	toggleMsg := "Help message for toggle"
 	rootCmd.Flags().BoolP("toggle", "t", false, toggleMsg)
 }
@@ -53,16 +73,18 @@ func initConfig() {
 		viper.SetConfigName(defaultConfigName)
 	}
 
-	viper.AutomaticEnv() // read in environment variables that match
+	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err != nil {
+	err := viper.ReadInConfig()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config read failed: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Fprintln(os.Stderr, "Config file:", viper.ConfigFileUsed())
 
-	if _, err := config.LoadConfig(); err != nil {
+	_, err = config.LoadConfig()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Config validation failed: %v\n", err)
 		os.Exit(1)
 	}
