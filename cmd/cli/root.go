@@ -10,10 +10,14 @@ import (
 )
 
 const (
-	configDir = "config"
+	defaultConfigDir  = "config"
+	defaultConfigName = "dev"
+	defaultConfigType = "yaml"
 )
 
-var cfgFile string
+var (
+	cfgFile string
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "jira-analyzer",
@@ -27,8 +31,10 @@ func Execute() error {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.Jira-Connector.yaml)")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	configMsg := fmt.Sprintf("default config is $%s/%s.%s", defaultConfigDir, defaultConfigName, defaultConfigType)
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", configMsg)
+	toggleMsg := "Help message for toggle"
+	rootCmd.Flags().BoolP("toggle", "t", false, toggleMsg)
 }
 
 func initConfig() {
@@ -40,11 +46,11 @@ func initConfig() {
 			cobra.CheckErr(err)
 		}
 
-		configPath := workDir + "/" + configDir
+		configPath := workDir + "/" + defaultConfigDir
 
 		viper.AddConfigPath(configPath)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("local")
+		viper.SetConfigType(defaultConfigType)
+		viper.SetConfigName(defaultConfigName)
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
