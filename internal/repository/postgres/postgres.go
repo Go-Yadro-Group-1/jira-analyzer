@@ -17,3 +17,6 @@ func GetIssueCountInProject(projectID int) int
 
 // Get Count of Open Issues in Project by ID
 func GetOpenIssueCountInProject(projectID int) int
+
+// Get Count of Closed Issues in Project by ID
+func GetClosedIssueCountInProject(projectID int) int
