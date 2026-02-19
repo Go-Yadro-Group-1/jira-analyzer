@@ -11,3 +11,6 @@ func New(db *sql.DB) *Postgres {
 		db: db,
 	}
 }
+
+// Get Count of Issues in Project by ID
+func GetIssueCountInProject(projectID int) int
