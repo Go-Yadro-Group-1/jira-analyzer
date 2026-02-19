@@ -28,3 +28,11 @@ type Issue struct {
 	UpdatedAt   time.Time
 	TimeSpent   int
 }
+
+type StatusChange struct {
+	ID         int
+	IssueID    int
+	FromStatus string
+	ToStatus   string
+	ChangedAt  time.Time
+}
