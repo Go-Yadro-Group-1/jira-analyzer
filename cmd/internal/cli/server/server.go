@@ -15,6 +15,8 @@ import (
 const (
 	defaultHost = "0.0.0.0"
 	defaultPort = 50051
+
+	defaultConfig = "config/dev.yaml"
 )
 
 //nolint:exhaustruct
@@ -29,7 +31,7 @@ func NewCommand() *cobra.Command {
 
 	cmd.Flags().String("host", defaultHost, "gRPC server host")
 	cmd.Flags().Int("port", defaultPort, "gRPC server port")
-	cmd.Flags().String("config", "", "path to config file")
+	cmd.Flags().String("config", defaultConfig, "path to config file")
 
 	return cmd
 }
