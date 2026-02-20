@@ -2,6 +2,7 @@ name: Integration Tests
 
 on:
   workflow_dispatch:
+  pull_request:
   pull_request_review:
     types: [submitted]
   workflow_run:
@@ -15,8 +16,10 @@ permissions:
 jobs:
   integration:
     runs-on: ubuntu-latest
+    environment: integration
     if: |
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     steps:
