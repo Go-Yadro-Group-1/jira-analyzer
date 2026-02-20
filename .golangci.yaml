@@ -12,7 +12,6 @@ linters:
   default: all
   disable:
     - depguard
-    - exhaustruct
     - wsl
     - nolintlint
 
