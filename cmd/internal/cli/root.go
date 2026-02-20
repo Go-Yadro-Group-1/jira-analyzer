@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/config"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
