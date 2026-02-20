@@ -5,6 +5,7 @@ package postgres_test
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"log"
 	"os"
 	"testing"
@@ -15,111 +16,99 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//go:embed testdata/seed.sql
+var seedSQL string
+
+//go:embed testdata/clean.sql
+var cleanSQL string
+
 const (
 	dbTimeout = time.Second * 5
 )
 
 //nolint:gochecknoglobals
-var repo *postgres.Postgres
+var database *sql.DB
 
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 
-	conn, err := sql.Open("postgres", dsn)
+	database, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("connect to db: %v", err)
 	}
 
 	ctx := context.Background()
 
-	if err = conn.PingContext(ctx); err != nil {
+	if err = database.PingContext(ctx); err != nil {
 		log.Fatalf("ping db: %v", err)
 	}
 
-	repo = postgres.New(conn)
-	seedDB(conn)
+	cleanDB(database)
+	seedDB(database)
 
 	code := m.Run()
 
-	cleanDB(conn)
-	conn.Close()
+	cleanDB(database)
+	database.Close()
 	os.Exit(code)
+}
+
+func TestGetStatsByProjectBase(t *testing.T) {
+	t.Parallel()
+
+	repo := postgres.New(database)
+
+	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
+	defer cancel()
+
+	want := postgres.ProjectStats{
+		ProjectID:        1,
+		Total:            6,
+		Open:             1,
+		Closed:           3,
+		Resolved:         1,
+		InProgress:       1,
+		Reopened:         1,
+		AvgDurationHours: time.Hour * 131,
+	}
+	have, err := repo.GetStatsByProject(ctx, want.ProjectID)
+	require.NoError(t, err)
+
+	haveAvgDailyLastWeek := have.AvgDailyLastWeek
+	have.AvgDailyLastWeek = 0.0
+	wantAvgDurationHours := 5.0 / 7.0
+
+	require.Equal(t, want, have)
+	require.InDelta(t, wantAvgDurationHours, haveAvgDailyLastWeek, 0.01)
+}
+
+func TestGetStatsByProjectEmpty(t *testing.T) {
+	t.Parallel()
+
+	repo := postgres.New(database)
+
+	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
+	defer cancel()
+
+	want := postgres.ProjectStats{}
+	have, err := repo.GetStatsByProject(ctx, want.ProjectID)
+	require.NoError(t, err)
+
+	require.Equal(t, want, have)
 }
 
 func seedDB(conn *sql.DB) {
 	ctx := context.Background()
 
-	if _, err := conn.ExecContext(
-		ctx,
-		`INSERT INTO raw.project (id, title) VALUES (1, 'Test Project')`,
-	); err != nil {
-		log.Fatalf("seed project: %v", err)
-	}
-
-	if _, err := conn.ExecContext(
-		ctx,
-		`INSERT INTO raw.author (id, name) VALUES (1, 'Alice'), (2, 'Bob')`,
-	); err != nil {
-		log.Fatalf("seed author: %v", err)
-	}
-
-	_, err := conn.ExecContext(ctx, `
-		INSERT INTO raw.issue
-			(id, project_id, author_id, assignee_id, key, summary,
-			type, priority, status, created_time, closed_time, updated_time, time_spent)
-		VALUES
-			(1, 1, 1, 2,    'TP-1', 'Fix bug',        'Bug',  'High',     'Closed',
-				NOW() - INTERVAL '10 days', NOW() - INTERVAL '5 days',   NOW() - INTERVAL '5 days',   3600),
-			(2, 1, 1, 2,    'TP-2', 'Add feature',    'Task', 'High',     'Closed',
-				NOW() - INTERVAL '8 days',  NOW() - INTERVAL '3 days',   NOW() - INTERVAL '3 days',   7200),
-			(3, 1, 1, 1,    'TP-3', 'Refactor code',  'Task', 'Critical', 'Resolved',
-				NOW() - INTERVAL '7 days',  NOW() - INTERVAL '1 day',    NOW() - INTERVAL '1 day',    1800),
-			(4, 1, 2, NULL, 'TP-4', 'Write tests',    'Task', 'Low',      'Open',
-				NOW() - INTERVAL '5 days',  NULL,                        NOW() - INTERVAL '5 days',   NULL),
-			(5, 1, 2, 2,    'TP-5', 'Deploy',         'Task', 'Medium',   'In Progress',
-				NOW() - INTERVAL '3 days',  NULL,                        NOW() - INTERVAL '3 days',   NULL),
-			(6, 1, 1, 2,    'TP-6', 'Regression fix', 'Bug',  'Medium',   'Closed',
-				NOW() - INTERVAL '6 days',  NOW() - INTERVAL '12 hours', NOW() - INTERVAL '12 hours', 900)
-	`)
-	if err != nil {
-		log.Fatalf("seed issue: %v", err)
-	}
-
-	_, err = conn.ExecContext(ctx, `
-		INSERT INTO raw.status_changes (issue_id, author_id, change_time, from_status, to_status)
-		VALUES
-			(1, 1, NOW() - INTERVAL '9 days',   'Open',        'In Progress'),
-			(1, 1, NOW() - INTERVAL '5 days',   'In Progress', 'Closed'),
-			(2, 1, NOW() - INTERVAL '7 days',   'Open',        'In Review'),
-			(2, 1, NOW() - INTERVAL '3 days',   'In Review',   'Closed'),
-			(3, 1, NOW() - INTERVAL '6 days',   'Open',        'Resolved'),
-			(6, 1, NOW() - INTERVAL '5 days',   'Open',        'Closed'),
-			(6, 1, NOW() - INTERVAL '2 days',   'Closed',      'Open'),
-			(6, 1, NOW() - INTERVAL '12 hours', 'Open',        'Closed')
-	`)
-	if err != nil {
-		log.Fatalf("seed status_changes: %v", err)
+	if _, err := conn.ExecContext(ctx, seedSQL); err != nil {
+		log.Fatalf("seed db: %v", err)
 	}
 }
 
 func cleanDB(conn *sql.DB) {
 	ctx := context.Background()
 
-	if _, err := conn.ExecContext(
-		ctx,
-		`TRUNCATE raw.status_changes, raw.issue, raw.author, raw.project RESTART IDENTITY`,
-	); err != nil {
+	if _, err := conn.ExecContext(ctx, cleanSQL); err != nil {
 		log.Fatalf("clean db: %v", err)
 	}
-}
-
-func TestGetStatsByProject(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
-	defer cancel()
-
-	stats, err := repo.GetStatsByProject(ctx, 1)
-	require.NoError(t, err)
-	require.NotNil(t, stats)
 }
