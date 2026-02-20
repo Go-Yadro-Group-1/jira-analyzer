@@ -1,5 +1,6 @@
 package postgres
 
+// raw information about project stats
 type ProjectStats struct {
 	ProjectID        int
 	Total            int
