@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/cli"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/cli"
 )
 
 func main() {
