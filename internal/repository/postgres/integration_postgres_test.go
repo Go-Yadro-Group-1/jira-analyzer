@@ -116,7 +116,7 @@ func cleanDB(conn *sql.DB) {
 func TestGetStatsByProject(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
 
 	stats, err := repo.GetStatsByProject(ctx, 1)
