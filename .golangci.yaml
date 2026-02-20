@@ -1,6 +1,10 @@
 version: "2"
 
 run:
+  build-tags:
+    - integration
+    - unit
+
   timeout: 5m
   tests: true
 
