@@ -11,7 +11,7 @@ type ProjectStats struct {
 	Reopened         int
 	Resolved         int
 	InProgress       int
-	AvgDurationHours float64
+	AvgDurationHours time.Duration
 	AvgDailyLastWeek float64
 }
 
