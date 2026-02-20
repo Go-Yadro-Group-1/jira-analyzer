@@ -29,8 +29,11 @@ jobs:
         with:
           go-version: "1.24"
 
-      - name: Start services
-        run: docker compose -f testdata/composes/docker-compose.integraion.yaml up -d --wait
+      - name: Start postgres
+        run: docker compose -f testdata/composes/docker-compose.integraion.yaml up -d --wait postgres
+
+      - name: Run migrations
+        run: docker compose -f testdata/composes/docker-compose.integraion.yaml run --rm migration
 
       - name: Run integration tests
         env:
