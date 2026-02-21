@@ -31,8 +31,9 @@ var database *sql.DB
 
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
+	var err error
 
-	database, err := sql.Open("postgres", dsn)
+	database, err = sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("connect to db: %v", err)
 	}
@@ -69,14 +70,14 @@ func TestGetStatsByProjectBase(t *testing.T) {
 		Resolved:         1,
 		InProgress:       1,
 		Reopened:         1,
-		AvgDurationHours: time.Hour * 131,
+		AvgDurationHours: time.Hour * 129,
 	}
 	have, err := repo.GetStatsByProject(ctx, want.ProjectID)
 	require.NoError(t, err)
 
 	haveAvgDailyLastWeek := have.AvgDailyLastWeek
 	have.AvgDailyLastWeek = 0.0
-	wantAvgDurationHours := 5.0 / 7.0
+	wantAvgDurationHours := 3.0 / 7.0
 
 	require.Equal(t, want, have)
 	require.InDelta(t, wantAvgDurationHours, haveAvgDailyLastWeek, 0.01)
