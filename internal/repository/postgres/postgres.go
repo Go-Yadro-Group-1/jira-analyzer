@@ -17,7 +17,7 @@ func New(db *sql.DB) *Postgres {
 	}
 }
 
-// nolint: revive, godoclint
+// nolint: revive, godoclint, funlen
 func (p *Postgres) GetStatsByProject(ctx context.Context, projectID int) (ProjectStats, error) {
 	var stats ProjectStats
 	stats.ProjectID = projectID
