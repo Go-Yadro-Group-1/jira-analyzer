@@ -75,7 +75,6 @@ func (p *Postgres) GetStatsByProject(ctx context.Context, projectID int) (Projec
 		&avgDurationHours,
 		&stats.AvgDailyLastWeek,
 	)
-
 	if err != nil {
 		return ProjectStats{}, fmt.Errorf("failed to get stats for project %d: %w", projectID, err)
 	}
