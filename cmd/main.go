@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/cli/server"
-	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/cli/version"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +16,6 @@ func main() {
 	}
 
 	rootCmd.AddCommand(server.NewCommand())
-	rootCmd.AddCommand(version.NewCommand())
 
 	err := rootCmd.Execute()
 	if err != nil {
