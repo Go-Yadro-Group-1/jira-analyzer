@@ -1,7 +1,14 @@
 package repository
 
-type Repository struct{}
+import (
+	"context"
 
-func New() *Repository {
-	return &Repository{}
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/models/raw"
+)
+
+type Repository interface {
+	InsertProject(ctx context.Context, project raw.Project) error
+	InsertAuthor(ctx context.Context, author raw.Author) error
+	InsertIssue(ctx context.Context, issue raw.Issue) error
+	InsertStatusChange(ctx context.Context, change raw.StatusChange) error
 }
