@@ -2,8 +2,14 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
+)
+
+var (
+	ErrProjectNotFound  = errors.New("project not found in cache")
+	ErrDataTypeNotFound = errors.New("data type not found in cache")
 )
 
 type CacheRepository[ProjectKey comparable, HistogrammKey comparable] struct {
@@ -28,13 +34,17 @@ func (c *CacheRepository[ProjectKey, HistogrammKey]) Get(
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if project, ok := c.data[projectID]; ok {
-		if value, ok := project[dataType]; ok {
-			return value, nil
-		}
+	project, ok := c.data[projectID]
+	if !ok {
+		return nil, ErrProjectNotFound
 	}
 
-	return nil, nil
+	value, ok := project[dataType]
+	if !ok {
+		return nil, ErrDataTypeNotFound
+	}
+
+	return value, nil
 }
 
 func (c *CacheRepository[ProjectKey, HistogrammKey]) Set(
@@ -75,7 +85,12 @@ func (c *CacheRepository[ProjectKey, HistogrammKey]) GetLastUpdated(
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.updatedAt[projectID], nil
+	t, ok := c.updatedAt[projectID]
+	if !ok {
+		return time.Time{}, ErrProjectNotFound
+	}
+
+	return t, nil
 }
 
 func (c *CacheRepository[ProjectKey, HistogrammKey]) SetLastUpdated(
