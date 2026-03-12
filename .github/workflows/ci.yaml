@@ -8,12 +8,18 @@ on:
       - "**.sql"
       - "go.mod"
       - "go.sum"
+      - ".github/workflows/**"
+      - ".golangci.yaml"
+      - "config/**"
   pull_request:
     paths:
       - "**.go"
       - "**.sql"
       - "go.mod"
       - "go.sum"
+      - ".github/workflows/**"
+      - ".golangci.yaml"
+      - "config/**"
 
 permissions:
   contents: read
