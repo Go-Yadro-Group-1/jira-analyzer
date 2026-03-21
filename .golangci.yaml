@@ -9,6 +9,10 @@ run:
   tests: true
 
 linters:
+  settings:
+    varnamelen:
+      ignore-names:
+        - ok
   default: all
   disable:
     - depguard
