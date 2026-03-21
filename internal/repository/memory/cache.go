@@ -4,26 +4,28 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 )
 
-type CacheRepository[ProjectKey comparable, HistogrammKey comparable] struct {
+type CacheRepository struct {
 	mu        sync.RWMutex
-	data      map[ProjectKey]map[HistogrammKey][]byte
-	updatedAt map[ProjectKey]time.Time
+	data      map[int]map[repository.DataType][]byte
+	updatedAt map[int]time.Time
 }
 
-func NewCacheRepository[ProjectKey comparable, HistogrammKey comparable]() *CacheRepository[ProjectKey, HistogrammKey] {
-	return &CacheRepository[ProjectKey, HistogrammKey]{
+func NewCacheRepository() *CacheRepository {
+	return &CacheRepository{
 		mu:        sync.RWMutex{},
-		data:      make(map[ProjectKey]map[HistogrammKey][]byte),
-		updatedAt: make(map[ProjectKey]time.Time),
+		data:      make(map[int]map[repository.DataType][]byte),
+		updatedAt: make(map[int]time.Time),
 	}
 }
 
-func (c *CacheRepository[ProjectKey, HistogrammKey]) Get(
+func (c *CacheRepository) Get(
 	_ context.Context,
-	projectID ProjectKey,
-	dataType HistogrammKey,
+	projectID int,
+	dataType repository.DataType,
 ) ([]byte, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -37,17 +39,17 @@ func (c *CacheRepository[ProjectKey, HistogrammKey]) Get(
 	return nil, nil
 }
 
-func (c *CacheRepository[ProjectKey, HistogrammKey]) Set(
+func (c *CacheRepository) Set(
 	_ context.Context,
-	projectID ProjectKey,
-	dataType HistogrammKey,
+	projectID int,
+	dataType repository.DataType,
 	value []byte,
 ) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if _, ok := c.data[projectID]; !ok {
-		c.data[projectID] = make(map[HistogrammKey][]byte)
+		c.data[projectID] = make(map[repository.DataType][]byte)
 	}
 
 	c.data[projectID][dataType] = value
@@ -55,10 +57,7 @@ func (c *CacheRepository[ProjectKey, HistogrammKey]) Set(
 	return nil
 }
 
-func (c *CacheRepository[ProjectKey, HistogrammKey]) Invalidate(
-	_ context.Context,
-	projectID ProjectKey,
-) error {
+func (c *CacheRepository) Invalidate(_ context.Context, projectID int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -68,21 +67,14 @@ func (c *CacheRepository[ProjectKey, HistogrammKey]) Invalidate(
 	return nil
 }
 
-func (c *CacheRepository[ProjectKey, HistogrammKey]) GetLastUpdated(
-	_ context.Context,
-	projectID ProjectKey,
-) (time.Time, error) {
+func (c *CacheRepository) GetLastUpdated(_ context.Context, projectID int) (time.Time, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	return c.updatedAt[projectID], nil
 }
 
-func (c *CacheRepository[ProjectKey, HistogrammKey]) SetLastUpdated(
-	_ context.Context,
-	projectID ProjectKey,
-	t time.Time,
-) error {
+func (c *CacheRepository) SetLastUpdated(_ context.Context, projectID int, t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
