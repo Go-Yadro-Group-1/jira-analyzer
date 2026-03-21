@@ -15,11 +15,6 @@ linters:
     - wsl
     - nolintlint
 
-  settings:
-    varnamelen:
-      ignore-names:
-        - ok
-
   exclusions:
     generated: strict
     warn-unused: false
