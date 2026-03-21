@@ -16,7 +16,7 @@ const MaxYearBars = 8
 
 type IssuesDurationHistogram struct {
 	Unit DurationUnit
-	Bars []int // Bars[i] = количество задач в i-м столбце
+	Bars []int
 }
 
 type IssuesTimeSpentHistogram struct {
