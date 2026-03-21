@@ -101,32 +101,67 @@ func (s *Service) GetProjectStat(ctx context.Context, projectID int) (repository
 
 const dataTypeIssuesDuration = "issues_duration"
 
-func (s *Service) GetIssuesDurationHistogram(ctx context.Context, projectID int) ([]repository.IssueDuration, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeIssuesDuration, s.repository.GetIssuesDurationByProject)
+func (s *Service) GetIssuesDurationHistogram(ctx context.Context, projectID int) (IssuesDurationHistogram, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypeIssuesDuration, func(ctx context.Context, projectID int) (IssuesDurationHistogram, error) {
+		rows, err := s.repository.GetIssuesDurationByProject(ctx, projectID)
+		if err != nil {
+			return IssuesDurationHistogram{}, err
+		}
+
+		return buildIssuesDurationHistogram(rows)
+	})
 }
 
 const dataTypeStatusTransitions = "status_transitions"
 
-func (s *Service) GetStatusTransitions(ctx context.Context, projectID int) ([]repository.StatusTransition, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeStatusTransitions, s.repository.GetStatusTransitionsByProject)
+func (s *Service) GetStatusHistograms(ctx context.Context, projectID int) ([]StatusHistogram, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypeStatusTransitions, func(ctx context.Context, projectID int) ([]StatusHistogram, error) {
+		rows, err := s.repository.GetStatusTransitionsByProject(ctx, projectID)
+		if err != nil {
+			return nil, err
+		}
+
+		return buildStatusHistograms(rows)
+	})
 }
 
 const dataTypeDailyActivity = "daily_activity"
 
-func (s *Service) GetDailyActivity(ctx context.Context, projectID int) ([]repository.DailyActivity, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeDailyActivity, s.repository.GetDailyActivityByProject)
+func (s *Service) GetDailyActivityChart(ctx context.Context, projectID int) (DailyActivityChart, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypeDailyActivity, func(ctx context.Context, projectID int) (DailyActivityChart, error) {
+		rows, err := s.repository.GetDailyActivityByProject(ctx, projectID)
+		if err != nil {
+			return DailyActivityChart{}, err
+		}
+
+		return buildDailyActivityChart(rows)
+	})
 }
 
 const dataTypeIssuesTimeSpent = "issues_time_spent"
 
-func (s *Service) GetIssuesTimeSpent(ctx context.Context, projectID int) ([]repository.IssueTimeSpent, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeIssuesTimeSpent, s.repository.GetIssuesTimeSpentByProject)
+func (s *Service) GetIssuesTimeSpentHistogram(ctx context.Context, projectID int) (IssuesTimeSpentHistogram, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypeIssuesTimeSpent, func(ctx context.Context, projectID int) (IssuesTimeSpentHistogram, error) {
+		rows, err := s.repository.GetIssuesTimeSpentByProject(ctx, projectID)
+		if err != nil {
+			return IssuesTimeSpentHistogram{}, err
+		}
+
+		return buildIssuesTimeSpentHistogram(rows)
+	})
 }
 
 const dataTypePriorityStats = "priority_stats"
 
-func (s *Service) GetPriorityStats(ctx context.Context, projectID int) ([]repository.PriorityStats, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypePriorityStats, s.repository.GetPriorityStatsByProject)
+func (s *Service) GetPriorityChart(ctx context.Context, projectID int) (PriorityChart, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypePriorityStats, func(ctx context.Context, projectID int) (PriorityChart, error) {
+		rows, err := s.repository.GetPriorityStatsByProject(ctx, projectID)
+		if err != nil {
+			return PriorityChart{}, err
+		}
+
+		return buildPriorityChart(rows), nil
+	})
 }
 
 func (s *Service) CompareTwoProjects(ctx context.Context, lhsProjectID, rhsProjectID int) ([2]repository.ProjectStats, error) {
