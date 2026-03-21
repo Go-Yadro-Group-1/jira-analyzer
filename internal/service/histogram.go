@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
@@ -11,76 +10,74 @@ import (
 var ErrNoClosedIssues = errors.New("no closed issues to build histogram")
 
 const (
-	secondsInHour  = 3600
-	secondsInDay   = 86400
-	secondsInMonth = 30 * secondsInDay
-	secondsInYear  = 365 * secondsInDay
-	maxYears       = 7
+	secondsInMinute = 60
+	secondsInHour   = 3600
+	secondsInDay    = 86400
+	secondsInMonth  = 30 * secondsInDay
+	secondsInYear   = 365 * secondsInDay
 )
 
-func durationToLabel(seconds int64) DurationLabel {
+func chooseUnit(maxDuration int64) DurationUnit {
 	switch {
-	case seconds < secondsInDay:
-		return HourLabel(seconds / secondsInHour)
-	case seconds < secondsInMonth:
-		return DayLabel(seconds / secondsInDay)
-	case seconds < secondsInYear:
-		return MonthLabel(seconds / secondsInMonth)
-	case seconds < int64(maxYears+1)*secondsInYear:
-		return YearLabel(seconds / secondsInYear)
+	case maxDuration < secondsInHour:
+		return UnitMinute
+	case maxDuration < secondsInDay:
+		return UnitHour
+	case maxDuration < secondsInMonth:
+		return UnitDay
+	case maxDuration < secondsInYear:
+		return UnitMonth
 	default:
-		return LabelOverflowYear
+		return UnitYear
 	}
 }
 
-func buildDurationHistogram(durations []int64) ([]Bar, error) {
+func durationToBucket(seconds int64, unit DurationUnit) int {
+	switch unit {
+	case UnitMinute:
+		return int(seconds / secondsInMinute)
+	case UnitHour:
+		return int(seconds / secondsInHour)
+	case UnitDay:
+		return int(seconds / secondsInDay)
+	case UnitMonth:
+		return int(seconds / secondsInMonth)
+	case UnitYear:
+		bucket := int(seconds / secondsInYear)
+		if bucket >= MaxYearBars {
+			return MaxYearBars - 1
+		}
+		return bucket
+	default:
+		return 0
+	}
+}
+
+func buildDurationHistogram(durations []int64) (DurationUnit, []int, error) {
 	if len(durations) == 0 {
-		return nil, ErrNoClosedIssues
+		return 0, nil, ErrNoClosedIssues
 	}
 
-	counts := make(map[DurationLabel]int)
+	var maxDuration int64
 	for _, d := range durations {
-		counts[durationToLabel(d)]++
+		if d > maxDuration {
+			maxDuration = d
+		}
 	}
 
-	bars := make([]Bar, 0, len(counts))
-	for label, count := range counts {
-		bars = append(bars, Bar{Label: label, Height: count})
+	unit := chooseUnit(maxDuration)
+	size := durationToBucket(maxDuration, unit) + 1
+
+	if unit == UnitYear && size < MaxYearBars {
+		size = MaxYearBars
 	}
 
-	sort.Slice(bars, func(i, j int) bool {
-		return labelOrder(bars[i].Label) < labelOrder(bars[j].Label)
-	})
-
-	return bars, nil
-}
-
-// labelOrder возвращает числовое значение метки для сортировки.
-func labelOrder(label DurationLabel) int64 {
-	var n int64
-
-	s := string(label)
-
-	if label == LabelOverflowYear {
-		return int64(maxYears+1) * secondsInYear
+	bars := make([]int, size)
+	for _, d := range durations {
+		bars[durationToBucket(d, unit)]++
 	}
 
-	switch {
-	case len(s) > 1 && s[len(s)-1] == 'h':
-		fmt.Sscanf(s, "%dh", &n)
-		return n * secondsInHour
-	case len(s) > 3 && s[len(s)-3:] == "day":
-		fmt.Sscanf(s, "%dday", &n)
-		return n * secondsInDay
-	case len(s) > 5 && s[len(s)-5:] == "month":
-		fmt.Sscanf(s, "%dmonth", &n)
-		return n * secondsInMonth
-	case len(s) > 4 && s[len(s)-4:] == "year":
-		fmt.Sscanf(s, "%dyear", &n)
-		return n * secondsInYear
-	}
-
-	return 0
+	return unit, bars, nil
 }
 
 func buildIssuesDurationHistogram(rows []repository.IssueDuration) (IssuesDurationHistogram, error) {
@@ -89,12 +86,12 @@ func buildIssuesDurationHistogram(rows []repository.IssueDuration) (IssuesDurati
 		durations[i] = r.Duration
 	}
 
-	bars, err := buildDurationHistogram(durations)
+	unit, bars, err := buildDurationHistogram(durations)
 	if err != nil {
 		return IssuesDurationHistogram{}, err
 	}
 
-	return IssuesDurationHistogram{Bars: bars}, nil
+	return IssuesDurationHistogram{Unit: unit, Bars: bars}, nil
 }
 
 func buildIssuesTimeSpentHistogram(rows []repository.IssueTimeSpent) (IssuesTimeSpentHistogram, error) {
@@ -103,23 +100,17 @@ func buildIssuesTimeSpentHistogram(rows []repository.IssueTimeSpent) (IssuesTime
 		durations[i] = r.TimeSpent
 	}
 
-	bars, err := buildDurationHistogram(durations)
+	unit, bars, err := buildDurationHistogram(durations)
 	if err != nil {
 		return IssuesTimeSpentHistogram{}, err
 	}
 
-	return IssuesTimeSpentHistogram{Bars: bars}, nil
+	return IssuesTimeSpentHistogram{Unit: unit, Bars: bars}, nil
 }
 
 func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogram, error) {
 	if len(rows) == 0 {
 		return nil, ErrNoClosedIssues
-	}
-
-	// группируем переходы по состоянию FromStatus и считаем длительность
-	// как разницу между последовательными переходами
-	type transitionKey struct {
-		status string
 	}
 
 	durationsByStatus := make(map[string][]int64)
@@ -143,12 +134,12 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 	result := make([]StatusHistogram, 0, len(statuses))
 
 	for _, status := range statuses {
-		bars, err := buildDurationHistogram(durationsByStatus[status])
+		unit, bars, err := buildDurationHistogram(durationsByStatus[status])
 		if err != nil {
 			continue
 		}
 
-		result = append(result, StatusHistogram{Status: status, Bars: bars})
+		result = append(result, StatusHistogram{Status: status, Unit: unit, Bars: bars})
 	}
 
 	return result, nil
@@ -183,9 +174,9 @@ func buildDailyActivityChart(rows []repository.DailyActivity) (DailyActivityChar
 }
 
 func buildPriorityChart(rows []repository.PriorityStats) PriorityChart {
-	bars := make([]Bar, len(rows))
+	bars := make([]PriorityBar, len(rows))
 	for i, r := range rows {
-		bars[i] = Bar{Label: r.Priority, Height: r.Count}
+		bars[i] = PriorityBar{Priority: r.Priority, Count: r.Count}
 	}
 
 	return PriorityChart{Bars: bars}

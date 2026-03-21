@@ -1,33 +1,33 @@
 package service
 
-import (
-	"fmt"
-	"time"
-)
+import "time"
 
-type DurationLabel string
+type DurationUnit string
 
 const (
-	LabelOverflowYear DurationLabel = "8+year"
+	UnitMinute DurationUnit = "minute"
+	UnitHour   DurationUnit = "hour"
+	UnitDay    DurationUnit = "day"
+	UnitMonth  DurationUnit = "month"
+	UnitYear   DurationUnit = "year"
 )
 
-func HourLabel(h int64) DurationLabel    { return DurationLabel(fmt.Sprintf("%dh", h)) }
-func DayLabel(d int64) DurationLabel     { return DurationLabel(fmt.Sprintf("%dday", d)) }
-func MonthLabel(m int64) DurationLabel   { return DurationLabel(fmt.Sprintf("%dmonth", m)) }
-func YearLabel(y int64) DurationLabel    { return DurationLabel(fmt.Sprintf("%dyear", y)) }
-
-type Bar struct {
-	Label  DurationLabel
-	Height int
-}
+const MaxYearBars = 8
 
 type IssuesDurationHistogram struct {
-	Bars []Bar
+	Unit DurationUnit
+	Bars []int // Bars[i] = количество задач в i-м столбце
+}
+
+type IssuesTimeSpentHistogram struct {
+	Unit DurationUnit
+	Bars []int
 }
 
 type StatusHistogram struct {
 	Status string
-	Bars   []Bar
+	Unit   DurationUnit
+	Bars   []int
 }
 
 type DailyActivityPoint struct {
@@ -42,10 +42,11 @@ type DailyActivityChart struct {
 	Points []DailyActivityPoint
 }
 
-type IssuesTimeSpentHistogram struct {
-	Bars []Bar
+type PriorityBar struct {
+	Priority string
+	Count    int
 }
 
 type PriorityChart struct {
-	Bars []Bar
+	Bars []PriorityBar
 }
