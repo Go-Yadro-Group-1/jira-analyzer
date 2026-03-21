@@ -120,7 +120,6 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 		if duration < 0 {
 			duration = 0
 		}
-
 		durationsByStatus[rows[i].FromStatus] = append(durationsByStatus[rows[i].FromStatus], duration)
 	}
 
