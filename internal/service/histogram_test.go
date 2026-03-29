@@ -7,8 +7,10 @@ import (
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -21,7 +23,14 @@ const (
 func TestGetIssuesDurationHistogram_Empty(t *testing.T) {
 	t.Parallel()
 
-	svc := service.New(&mockRepository{}, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).Return(nil, nil)
+
+	svc := service.New(repo, cache)
 
 	_, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -31,12 +40,15 @@ func TestGetIssuesDurationHistogram_Empty(t *testing.T) {
 func TestGetIssuesDurationHistogram_HourZone(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
-			{IssueID: 1, Duration: 2 * hour},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
+		Return([]repository.IssueDuration{{IssueID: 1, Duration: 2 * hour}}, nil)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -50,12 +62,15 @@ func TestGetIssuesDurationHistogram_HourZone(t *testing.T) {
 func TestGetIssuesDurationHistogram_DayZone(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
-			{IssueID: 1, Duration: 3 * day},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
+		Return([]repository.IssueDuration{{IssueID: 1, Duration: 3 * day}}, nil)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -68,12 +83,15 @@ func TestGetIssuesDurationHistogram_DayZone(t *testing.T) {
 func TestGetIssuesDurationHistogram_MonthZone(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
-			{IssueID: 1, Duration: 2 * month},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
+		Return([]repository.IssueDuration{{IssueID: 1, Duration: 2 * month}}, nil)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -86,12 +104,15 @@ func TestGetIssuesDurationHistogram_MonthZone(t *testing.T) {
 func TestGetIssuesDurationHistogram_YearZone(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
-			{IssueID: 1, Duration: 3 * year},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
+		Return([]repository.IssueDuration{{IssueID: 1, Duration: 3 * year}}, nil)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -104,12 +125,15 @@ func TestGetIssuesDurationHistogram_YearZone(t *testing.T) {
 func TestGetIssuesDurationHistogram_MaxYear(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
-			{IssueID: 1, Duration: 10 * year},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
+		Return([]repository.IssueDuration{{IssueID: 1, Duration: 10 * year}}, nil)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -121,14 +145,20 @@ func TestGetIssuesDurationHistogram_MaxYear(t *testing.T) {
 func TestGetIssuesDurationHistogram_MultipleZones(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		issuesDuration: []repository.IssueDuration{
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).Return(
+		[]repository.IssueDuration{
 			{IssueID: 1, Duration: 1 * hour},
 			{IssueID: 2, Duration: 5 * day},
 			{IssueID: 3, Duration: 5 * day},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+		}, nil,
+	)
+
+	svc := service.New(repo, cache)
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -140,7 +170,14 @@ func TestGetIssuesDurationHistogram_MultipleZones(t *testing.T) {
 func TestGetStatusHistograms_Empty(t *testing.T) {
 	t.Parallel()
 
-	svc := service.New(&mockRepository{}, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetStatusTransitionsByProject(gomock.Any(), 1).Return(nil, nil)
+
+	svc := service.New(repo, cache)
 
 	_, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -150,9 +187,14 @@ func TestGetStatusHistograms_Empty(t *testing.T) {
 func TestGetStatusHistograms_SingleIssue(t *testing.T) {
 	t.Parallel()
 
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
 	now := time.Now()
-	repo := &mockRepository{
-		statusTransitions: []repository.StatusTransition{
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetStatusTransitionsByProject(gomock.Any(), 1).Return(
+		[]repository.StatusTransition{
 			{IssueID: 1, FromStatus: "Open", ToStatus: "In Progress", ChangeTime: now},
 			{
 				IssueID:    1,
@@ -161,9 +203,10 @@ func TestGetStatusHistograms_SingleIssue(t *testing.T) {
 				ChangeTime: now.Add(2 * time.Hour),
 			},
 			{IssueID: 1, FromStatus: "Closed", ToStatus: "", ChangeTime: now.Add(3 * time.Hour)},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+		}, nil,
+	)
+
+	svc := service.New(repo, cache)
 
 	histograms, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -176,16 +219,22 @@ func TestGetStatusHistograms_SingleIssue(t *testing.T) {
 func TestGetStatusHistograms_GroupsByIssue(t *testing.T) {
 	t.Parallel()
 
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
 	now := time.Now()
-	repo := &mockRepository{
-		statusTransitions: []repository.StatusTransition{
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetStatusTransitionsByProject(gomock.Any(), 1).Return(
+		[]repository.StatusTransition{
 			{IssueID: 1, FromStatus: "Open", ToStatus: "Done", ChangeTime: now},
 			{IssueID: 1, FromStatus: "Done", ToStatus: "", ChangeTime: now.Add(time.Hour)},
 			{IssueID: 2, FromStatus: "Open", ToStatus: "Done", ChangeTime: now.Add(2 * time.Hour)},
 			{IssueID: 2, FromStatus: "Done", ToStatus: "", ChangeTime: now.Add(5 * time.Hour)},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+		}, nil,
+	)
+
+	svc := service.New(repo, cache)
 
 	histograms, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -207,7 +256,14 @@ func TestGetStatusHistograms_GroupsByIssue(t *testing.T) {
 func TestGetDailyActivityChart_Empty(t *testing.T) {
 	t.Parallel()
 
-	svc := service.New(&mockRepository{}, newMockCache())
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetDailyActivityByProject(gomock.Any(), 1).Return(nil, nil)
+
+	svc := service.New(repo, cache)
 
 	chart, err := svc.GetDailyActivityChart(context.Background(), 1)
 
@@ -218,16 +274,22 @@ func TestGetDailyActivityChart_Empty(t *testing.T) {
 func TestGetDailyActivityChart_SortedWithCumulative(t *testing.T) {
 	t.Parallel()
 
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
 	day1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	day2 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
-	repo := &mockRepository{
-		dailyActivity: []repository.DailyActivity{
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetDailyActivityByProject(gomock.Any(), 1).Return(
+		[]repository.DailyActivity{
 			{Date: day2, Creation: 3, Completion: 1},
 			{Date: day1, Creation: 2, Completion: 0},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+		}, nil,
+	)
+
+	svc := service.New(repo, cache)
 
 	chart, err := svc.GetDailyActivityChart(context.Background(), 1)
 
@@ -242,13 +304,19 @@ func TestGetDailyActivityChart_SortedWithCumulative(t *testing.T) {
 func TestGetPriorityChart(t *testing.T) {
 	t.Parallel()
 
-	repo := &mockRepository{
-		priorityStats: []repository.PriorityStats{
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetPriorityStatsByProject(gomock.Any(), 1).Return(
+		[]repository.PriorityStats{
 			{Priority: "High", Count: 5},
 			{Priority: "Low", Count: 2},
-		},
-	}
-	svc := service.New(repo, newMockCache())
+		}, nil,
+	)
+
+	svc := service.New(repo, cache)
 
 	chart, err := svc.GetPriorityChart(context.Background(), 1)
 
