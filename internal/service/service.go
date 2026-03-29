@@ -1,5 +1,8 @@
 package service
 
+//go:generate mockgen -destination=mocks/mock_repository.go -package=mocks github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service Repository
+//go:generate mockgen -destination=mocks/mock_cache.go -package=mocks github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service Cache
+
 import (
 	"context"
 	"encoding/json"
