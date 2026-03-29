@@ -223,14 +223,14 @@ func TestGetStatusTransitionsByProject(t *testing.T) {
 	baseTime := time.Now()
 
 	want := []repository.StatusTransition{
-		mkTransition(baseTime, "Open", "In Progress"),
-		mkTransition(baseTime, "In Progress", "Closed"),
-		mkTransition(baseTime, "Open", "In Review"),
-		mkTransition(baseTime, "In Review", "Closed"),
-		mkTransition(baseTime, "Open", "Closed"),
-		mkTransition(baseTime, "Closed", "Open"),
-		mkTransition(baseTime, "Open", "Closed"),
-		mkTransition(baseTime, "Open", "Resolved"),
+		mkTransition(baseTime, 1, "Open", "In Progress"),
+		mkTransition(baseTime, 1, "In Progress", "Closed"),
+		mkTransition(baseTime, 2, "Open", "In Review"),
+		mkTransition(baseTime, 2, "In Review", "Closed"),
+		mkTransition(baseTime, 6, "Open", "Closed"),
+		mkTransition(baseTime, 6, "Closed", "Open"),
+		mkTransition(baseTime, 6, "Open", "Closed"),
+		mkTransition(baseTime, 3, "Open", "Resolved"),
 	}
 
 	for ind := range have {
@@ -394,8 +394,9 @@ func TestGetPriorityStatsByProjectEmpty(t *testing.T) {
 	require.Empty(t, have)
 }
 
-func mkTransition(changeTime time.Time, from, to string) repository.StatusTransition {
+func mkTransition(changeTime time.Time, issueID int, from, to string) repository.StatusTransition {
 	return repository.StatusTransition{
+		IssueID:    issueID,
 		ChangeTime: changeTime,
 		FromStatus: from,
 		ToStatus:   to,

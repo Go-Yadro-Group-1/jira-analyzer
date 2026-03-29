@@ -22,6 +22,7 @@ type IssueDuration struct {
 }
 
 type StatusTransition struct {
+	IssueID    int
 	ChangeTime time.Time
 	FromStatus string
 	ToStatus   string
