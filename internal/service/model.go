@@ -12,9 +12,6 @@ const (
 	ChartTypeDailyActivity       ChartType = "daily_activity"
 )
 
-// HistogramBar — один столбец мультимасштабной гистограммы.
-// Label содержит человекочитаемое обозначение временного диапазона:
-// "0h"–"23h", "1day"–"30day", "1month"–"11month", "1year"–"7year", "8+year".
 type HistogramBar struct {
 	Label string
 	Count int

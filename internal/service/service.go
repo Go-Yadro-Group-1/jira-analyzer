@@ -37,8 +37,6 @@ type Service struct {
 	cache      Cache
 	sfGroup    singleflight.Group
 
-	// lastCheckedAt кэширует момент последней успешной проверки свежести кэша
-	// по projectID, чтобы не ходить в БД на каждый запрос.
 	lastCheckedMu sync.RWMutex
 	lastCheckedAt map[int]time.Time
 }
@@ -101,8 +99,6 @@ func fetchWithCache[T any](
 		}
 	}
 
-	// Singleflight: несколько параллельных запросов на один projectID+dataType
-	// делают только один запрос в БД.
 	key := fmt.Sprintf("%d:%s", projectID, dataType)
 	v, err, _ := s.sfGroup.Do(key, func() (any, error) {
 		result, err := fetch(ctx, projectID)
@@ -188,8 +184,6 @@ func (s *Service) GetPriorityChart(ctx context.Context, projectID int) (Priority
 	})
 }
 
-// GetChart возвращает JSON-сериализованный график запрошенного типа.
-// Используется gRPC-хендлером для ответа GetChartResponse.data.
 func (s *Service) GetChart(ctx context.Context, projectID int, chartType ChartType) ([]byte, error) {
 	switch chartType {
 	case ChartTypeOpenStateHistogram:
@@ -251,7 +245,6 @@ func (s *Service) CompareTwoProjects(ctx context.Context, lhsProjectID, rhsProje
 	return result, nil
 }
 
-// CompareProjectsCharts возвращает графики одного типа для двух проектов параллельно.
 func (s *Service) CompareProjectsCharts(ctx context.Context, lhsProjectID, rhsProjectID int, chartType ChartType) ([2][]byte, error) {
 	var result [2][]byte
 

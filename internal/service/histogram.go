@@ -17,14 +17,6 @@ const (
 	secondsInYear  = 365 * secondsInDay
 )
 
-// Мультимасштабная гистограмма: до 73 столбцов (ОФ2.1.3, ОФ2.1.4).
-//
-// Зоны:
-//   < 1 дня    → "0h"–"23h"          (24 столбца)
-//   < 1 месяца → "1day"–"30day"       (30 столбцов)
-//   < 1 года   → "1month"–"11month"   (11 столбцов)
-//   ≥ 1 года   → "1year"–"7year", "8+year" (8 столбцов)
-
 func durationToBarLabel(seconds int64) string {
 	switch {
 	case seconds < secondsInDay:
@@ -85,7 +77,6 @@ func buildMultiScaleHistogram(durations []int64) ([]HistogramBar, error) {
 	return bars, nil
 }
 
-// barIndexToSeconds возвращает нижнюю границу временного диапазона для столбца с индексом i.
 func barIndexToSeconds(i int) int64 {
 	switch {
 	case i < 24:
@@ -134,7 +125,6 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 		return nil, ErrNoClosedIssues
 	}
 
-	// Группируем переходы по задаче, чтобы не смешивать длительности разных задач.
 	byIssue := make(map[int][]repository.StatusTransition)
 	for _, r := range rows {
 		byIssue[r.IssueID] = append(byIssue[r.IssueID], r)
