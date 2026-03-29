@@ -42,6 +42,7 @@ linters:
           - dupl
           - gosec
           - noinlineerr
+          - exhaustruct
 
 formatters:
   enable:
