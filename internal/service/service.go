@@ -15,11 +15,26 @@ import (
 type Repository interface {
 	GetProjectLastUpdated(ctx context.Context, projectID int) (time.Time, error)
 	GetStatsByProject(ctx context.Context, projectID int) (repository.ProjectStats, error)
-	GetIssuesDurationByProject(ctx context.Context, projectID int) ([]repository.IssueDuration, error)
-	GetStatusTransitionsByProject(ctx context.Context, projectID int) ([]repository.StatusTransition, error)
-	GetDailyActivityByProject(ctx context.Context, projectID int) ([]repository.DailyActivity, error)
-	GetIssuesTimeSpentByProject(ctx context.Context, projectID int) ([]repository.IssueTimeSpent, error)
-	GetPriorityStatsByProject(ctx context.Context, projectID int) ([]repository.PriorityStats, error)
+	GetIssuesDurationByProject(
+		ctx context.Context,
+		projectID int,
+	) ([]repository.IssueDuration, error)
+	GetStatusTransitionsByProject(
+		ctx context.Context,
+		projectID int,
+	) ([]repository.StatusTransition, error)
+	GetDailyActivityByProject(
+		ctx context.Context,
+		projectID int,
+	) ([]repository.DailyActivity, error)
+	GetIssuesTimeSpentByProject(
+		ctx context.Context,
+		projectID int,
+	) ([]repository.IssueTimeSpent, error)
+	GetPriorityStatsByProject(
+		ctx context.Context,
+		projectID int,
+	) ([]repository.PriorityStats, error)
 }
 
 type Cache interface {
@@ -33,10 +48,9 @@ type Cache interface {
 const staleCheckTTL = 30 * time.Second
 
 type Service struct {
-	repository Repository
-	cache      Cache
-	sfGroup    singleflight.Group
-
+	repository    Repository
+	cache         Cache
+	sfGroup       singleflight.Group
 	lastCheckedMu sync.RWMutex
 	lastCheckedAt map[int]time.Time
 }
@@ -45,26 +59,218 @@ func New(repository Repository, cache Cache) *Service {
 	return &Service{
 		repository:    repository,
 		cache:         cache,
+		sfGroup:       singleflight.Group{},
+		lastCheckedMu: sync.RWMutex{},
 		lastCheckedAt: make(map[int]time.Time),
 	}
 }
 
+const dataTypeStats = "stats"
+
+func (s *Service) GetProjectStat(
+	ctx context.Context,
+	projectID int,
+) (repository.ProjectStats, error) {
+	return fetchWithCache(ctx, s, projectID, dataTypeStats, s.repository.GetStatsByProject)
+}
+
+const dataTypeIssuesDuration = "issues_duration"
+
+func (s *Service) GetIssuesDurationHistogram(
+	ctx context.Context,
+	projectID int,
+) (IssuesDurationHistogram, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeIssuesDuration,
+		func(ctx context.Context, projectID int) (IssuesDurationHistogram, error) {
+			rows, err := s.repository.GetIssuesDurationByProject(ctx, projectID)
+			if err != nil {
+				return IssuesDurationHistogram{}, fmt.Errorf("get issues duration: %w", err)
+			}
+
+			return buildIssuesDurationHistogram(rows)
+		},
+	)
+}
+
+const dataTypeStatusTransitions = "status_transitions"
+
+func (s *Service) GetStatusHistograms(
+	ctx context.Context,
+	projectID int,
+) ([]StatusHistogram, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeStatusTransitions,
+		func(ctx context.Context, projectID int) ([]StatusHistogram, error) {
+			rows, err := s.repository.GetStatusTransitionsByProject(ctx, projectID)
+			if err != nil {
+				return nil, fmt.Errorf("get status transitions: %w", err)
+			}
+
+			return buildStatusHistograms(rows)
+		},
+	)
+}
+
+const dataTypeDailyActivity = "daily_activity"
+
+func (s *Service) GetDailyActivityChart(
+	ctx context.Context,
+	projectID int,
+) (DailyActivityChart, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeDailyActivity,
+		func(ctx context.Context, projectID int) (DailyActivityChart, error) {
+			rows, err := s.repository.GetDailyActivityByProject(ctx, projectID)
+			if err != nil {
+				return DailyActivityChart{}, fmt.Errorf("get daily activity: %w", err)
+			}
+
+			return buildDailyActivityChart(rows)
+		},
+	)
+}
+
+const dataTypeIssuesTimeSpent = "issues_time_spent"
+
+func (s *Service) GetIssuesTimeSpentHistogram(
+	ctx context.Context,
+	projectID int,
+) (IssuesTimeSpentHistogram, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeIssuesTimeSpent,
+		func(ctx context.Context, projectID int) (IssuesTimeSpentHistogram, error) {
+			rows, err := s.repository.GetIssuesTimeSpentByProject(ctx, projectID)
+			if err != nil {
+				return IssuesTimeSpentHistogram{}, fmt.Errorf("get issues time spent: %w", err)
+			}
+
+			return buildIssuesTimeSpentHistogram(rows)
+		},
+	)
+}
+
+const dataTypePriorityStats = "priority_stats"
+
+func (s *Service) GetPriorityChart(ctx context.Context, projectID int) (PriorityChart, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypePriorityStats,
+		func(ctx context.Context, projectID int) (PriorityChart, error) {
+			rows, err := s.repository.GetPriorityStatsByProject(ctx, projectID)
+			if err != nil {
+				return PriorityChart{}, fmt.Errorf("get priority stats: %w", err)
+			}
+
+			return buildPriorityChart(rows), nil
+		},
+	)
+}
+
+func (s *Service) GetChart(
+	ctx context.Context,
+	projectID int,
+	chartType ChartType,
+) ([]byte, error) {
+	switch chartType {
+	case ChartTypeOpenStateHistogram:
+		return marshalResult(s.GetIssuesDurationHistogram(ctx, projectID))
+	case ChartTypeStateDistribution:
+		return marshalResult(s.GetStatusHistograms(ctx, projectID))
+	case ChartTypeComplexityHistogram:
+		return marshalResult(s.GetIssuesTimeSpentHistogram(ctx, projectID))
+	case ChartTypePriority:
+		return marshalResult(s.GetPriorityChart(ctx, projectID))
+	case ChartTypeDailyActivity:
+		return marshalResult(s.GetDailyActivityChart(ctx, projectID))
+	default:
+		return nil, ErrUnknownChartType
+	}
+}
+
+func (s *Service) CompareTwoProjects(
+	ctx context.Context,
+	lhsProjectID, rhsProjectID int,
+) ([2]repository.ProjectStats, error) {
+	var result [2]repository.ProjectStats
+
+	group, ctx := errgroup.WithContext(ctx)
+
+	group.Go(func() error {
+		var err error
+
+		result[0], err = s.GetProjectStat(ctx, lhsProjectID)
+
+		return err
+	})
+
+	group.Go(func() error {
+		var err error
+
+		result[1], err = s.GetProjectStat(ctx, rhsProjectID)
+
+		return err
+	})
+
+	err := group.Wait()
+	if err != nil {
+		return [2]repository.ProjectStats{}, fmt.Errorf("compare projects: %w", err)
+	}
+
+	return result, nil
+}
+
+func (s *Service) CompareProjectsCharts(
+	ctx context.Context,
+	lhsProjectID, rhsProjectID int,
+	chartType ChartType,
+) ([2][]byte, error) {
+	var result [2][]byte
+
+	group, ctx := errgroup.WithContext(ctx)
+
+	group.Go(func() error {
+		var err error
+
+		result[0], err = s.GetChart(ctx, lhsProjectID, chartType)
+
+		return err
+	})
+
+	group.Go(func() error {
+		var err error
+
+		result[1], err = s.GetChart(ctx, rhsProjectID, chartType)
+
+		return err
+	})
+
+	err := group.Wait()
+	if err != nil {
+		return [2][]byte{}, fmt.Errorf("compare projects charts: %w", err)
+	}
+
+	return result, nil
+}
+
 func (s *Service) isCacheStale(ctx context.Context, projectID int) (bool, error) {
 	s.lastCheckedMu.RLock()
-	if t, ok := s.lastCheckedAt[projectID]; ok && time.Since(t) < staleCheckTTL {
+
+	if checkedAt, ok := s.lastCheckedAt[projectID]; ok && time.Since(checkedAt) < staleCheckTTL {
 		s.lastCheckedMu.RUnlock()
+
 		return false, nil
 	}
+
 	s.lastCheckedMu.RUnlock()
 
 	dbUpdatedAt, err := s.repository.GetProjectLastUpdated(ctx, projectID)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get project last updated: %w", err)
 	}
 
 	cacheUpdatedAt, err := s.cache.GetLastUpdated(ctx, projectID)
 	if err != nil {
-		return true, nil
+		return true, nil //nolint:nilerr
 	}
 
 	stale := dbUpdatedAt.After(cacheUpdatedAt)
@@ -73,198 +279,66 @@ func (s *Service) isCacheStale(ctx context.Context, projectID int) (bool, error)
 		s.lastCheckedAt[projectID] = time.Now()
 		s.lastCheckedMu.Unlock()
 	}
+
 	return stale, nil
 }
 
-func fetchWithCache[T any](
+func fetchWithCache[T any]( //nolint:ireturn
 	ctx context.Context,
-	s *Service,
+	svc *Service,
 	projectID int,
 	dataType string,
 	fetch func(context.Context, int) (T, error),
 ) (T, error) {
 	var zero T
 
-	stale, err := s.isCacheStale(ctx, projectID)
+	stale, err := svc.isCacheStale(ctx, projectID)
 	if err != nil {
 		return zero, err
 	}
 
 	if !stale {
-		if cached, err := s.cache.Get(ctx, projectID, dataType); err == nil {
+		cached, cacheErr := svc.cache.Get(ctx, projectID, dataType)
+		if cacheErr == nil {
 			var result T
-			if err := json.Unmarshal(cached, &result); err == nil {
+			if json.Unmarshal(cached, &result) == nil {
 				return result, nil
 			}
 		}
 	}
 
 	key := fmt.Sprintf("%d:%s", projectID, dataType)
-	v, err, _ := s.sfGroup.Do(key, func() (any, error) {
-		result, err := fetch(ctx, projectID)
-		if err != nil {
-			return nil, err
+
+	sfResult, sfErr, _ := svc.sfGroup.Do(key, func() (any, error) {
+		result, fetchErr := fetch(ctx, projectID)
+		if fetchErr != nil {
+			return nil, fetchErr
 		}
-		if data, err := json.Marshal(result); err == nil {
-			_ = s.cache.Set(ctx, projectID, dataType, data)
-			_ = s.cache.SetLastUpdated(ctx, projectID, time.Now())
+
+		data, marshalErr := json.Marshal(result)
+		if marshalErr == nil {
+			_ = svc.cache.Set(ctx, projectID, dataType, data)
+			_ = svc.cache.SetLastUpdated(ctx, projectID, time.Now())
 		}
+
 		return result, nil
 	})
+	if sfErr != nil {
+		return zero, fmt.Errorf("fetch %s: %w", dataType, sfErr)
+	}
+
+	return sfResult.(T), nil //nolint:forcetypeassert
+}
+
+func marshalResult[T any](val T, err error) ([]byte, error) { //nolint:ireturn
 	if err != nil {
-		return zero, err
+		return nil, err
 	}
 
-	return v.(T), nil
-}
-
-const dataTypeStats = "stats"
-
-func (s *Service) GetProjectStat(ctx context.Context, projectID int) (repository.ProjectStats, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeStats, s.repository.GetStatsByProject)
-}
-
-const dataTypeIssuesDuration = "issues_duration"
-
-func (s *Service) GetIssuesDurationHistogram(ctx context.Context, projectID int) (IssuesDurationHistogram, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeIssuesDuration, func(ctx context.Context, projectID int) (IssuesDurationHistogram, error) {
-		rows, err := s.repository.GetIssuesDurationByProject(ctx, projectID)
-		if err != nil {
-			return IssuesDurationHistogram{}, err
-		}
-		return buildIssuesDurationHistogram(rows)
-	})
-}
-
-const dataTypeStatusTransitions = "status_transitions"
-
-func (s *Service) GetStatusHistograms(ctx context.Context, projectID int) ([]StatusHistogram, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeStatusTransitions, func(ctx context.Context, projectID int) ([]StatusHistogram, error) {
-		rows, err := s.repository.GetStatusTransitionsByProject(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return buildStatusHistograms(rows)
-	})
-}
-
-const dataTypeDailyActivity = "daily_activity"
-
-func (s *Service) GetDailyActivityChart(ctx context.Context, projectID int) (DailyActivityChart, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeDailyActivity, func(ctx context.Context, projectID int) (DailyActivityChart, error) {
-		rows, err := s.repository.GetDailyActivityByProject(ctx, projectID)
-		if err != nil {
-			return DailyActivityChart{}, err
-		}
-		return buildDailyActivityChart(rows)
-	})
-}
-
-const dataTypeIssuesTimeSpent = "issues_time_spent"
-
-func (s *Service) GetIssuesTimeSpentHistogram(ctx context.Context, projectID int) (IssuesTimeSpentHistogram, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeIssuesTimeSpent, func(ctx context.Context, projectID int) (IssuesTimeSpentHistogram, error) {
-		rows, err := s.repository.GetIssuesTimeSpentByProject(ctx, projectID)
-		if err != nil {
-			return IssuesTimeSpentHistogram{}, err
-		}
-		return buildIssuesTimeSpentHistogram(rows)
-	})
-}
-
-const dataTypePriorityStats = "priority_stats"
-
-func (s *Service) GetPriorityChart(ctx context.Context, projectID int) (PriorityChart, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypePriorityStats, func(ctx context.Context, projectID int) (PriorityChart, error) {
-		rows, err := s.repository.GetPriorityStatsByProject(ctx, projectID)
-		if err != nil {
-			return PriorityChart{}, err
-		}
-		return buildPriorityChart(rows), nil
-	})
-}
-
-func (s *Service) GetChart(ctx context.Context, projectID int, chartType ChartType) ([]byte, error) {
-	switch chartType {
-	case ChartTypeOpenStateHistogram:
-		h, err := s.GetIssuesDurationHistogram(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(h)
-	case ChartTypeStateDistribution:
-		h, err := s.GetStatusHistograms(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(h)
-	case ChartTypeComplexityHistogram:
-		h, err := s.GetIssuesTimeSpentHistogram(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(h)
-	case ChartTypePriority:
-		h, err := s.GetPriorityChart(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(h)
-	case ChartTypeDailyActivity:
-		h, err := s.GetDailyActivityChart(ctx, projectID)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(h)
-	default:
-		return nil, fmt.Errorf("unknown chart type: %s", chartType)
-	}
-}
-
-func (s *Service) CompareTwoProjects(ctx context.Context, lhsProjectID, rhsProjectID int) ([2]repository.ProjectStats, error) {
-	var result [2]repository.ProjectStats
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		var err error
-		result[0], err = s.GetProjectStat(ctx, lhsProjectID)
-		return err
-	})
-
-	g.Go(func() error {
-		var err error
-		result[1], err = s.GetProjectStat(ctx, rhsProjectID)
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		return [2]repository.ProjectStats{}, err
+	data, marshalErr := json.Marshal(val)
+	if marshalErr != nil {
+		return nil, fmt.Errorf("marshal result: %w", marshalErr)
 	}
 
-	return result, nil
-}
-
-func (s *Service) CompareProjectsCharts(ctx context.Context, lhsProjectID, rhsProjectID int, chartType ChartType) ([2][]byte, error) {
-	var result [2][]byte
-
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		var err error
-		result[0], err = s.GetChart(ctx, lhsProjectID, chartType)
-		return err
-	})
-
-	g.Go(func() error {
-		var err error
-		result[1], err = s.GetChart(ctx, rhsProjectID, chartType)
-		return err
-	})
-
-	if err := g.Wait(); err != nil {
-		return [2][]byte{}, err
-	}
-
-	return result, nil
+	return data, nil
 }

@@ -17,6 +17,24 @@ const (
 	secondsInYear  = 365 * secondsInDay
 )
 
+const (
+	maxYears = 8
+
+	hourBarsCount  = 24
+	dayBarsCount   = 30
+	monthBarsCount = 11
+
+	dayBarOffset   = hourBarsCount - 1
+	monthBarOffset = hourBarsCount + dayBarsCount - 1
+	yearBarOffset  = hourBarsCount + dayBarsCount + monthBarsCount - 1
+	maxYearIndex   = yearBarOffset + maxYears
+
+	dayZoneEnd   = hourBarsCount + dayBarsCount
+	monthZoneEnd = dayZoneEnd + monthBarsCount
+
+	totalBars = hourBarsCount + dayBarsCount + monthBarsCount + maxYears
+)
+
 func durationToBarLabel(seconds int64) string {
 	switch {
 	case seconds < secondsInDay:
@@ -26,11 +44,12 @@ func durationToBarLabel(seconds int64) string {
 	case seconds < secondsInYear:
 		return fmt.Sprintf("%dmonth", seconds/secondsInMonth)
 	default:
-		if y := seconds / secondsInYear; y >= 8 {
+		y := seconds / secondsInYear
+		if y >= maxYears {
 			return "8+year"
-		} else {
-			return fmt.Sprintf("%dyear", y)
 		}
+
+		return fmt.Sprintf("%dyear", y)
 	}
 }
 
@@ -39,15 +58,31 @@ func durationToBarIndex(seconds int64) int {
 	case seconds < secondsInDay:
 		return int(seconds / secondsInHour)
 	case seconds < secondsInMonth:
-		return 23 + int(seconds/secondsInDay)
+		return dayBarOffset + int(seconds/secondsInDay)
 	case seconds < secondsInYear:
-		return 53 + int(seconds/secondsInMonth)
+		return monthBarOffset + int(seconds/secondsInMonth)
 	default:
 		y := int(seconds / secondsInYear)
-		if y >= 8 {
-			return 72
+		if y >= maxYears {
+			return maxYearIndex
 		}
-		return 64 + y
+
+		return yearBarOffset + y
+	}
+}
+
+func barIndexToSeconds(idx int) int64 {
+	switch {
+	case idx < hourBarsCount:
+		return int64(idx) * secondsInHour
+	case idx < dayZoneEnd:
+		return int64(idx-dayBarOffset) * secondsInDay
+	case idx < monthZoneEnd:
+		return int64(idx-monthBarOffset) * secondsInMonth
+	case idx < maxYearIndex:
+		return int64(idx-yearBarOffset) * secondsInYear
+	default:
+		return maxYears * secondsInYear
 	}
 }
 
@@ -56,46 +91,38 @@ func buildMultiScaleHistogram(durations []int64) ([]HistogramBar, error) {
 		return nil, ErrNoClosedIssues
 	}
 
-	const totalBars = 73
-
 	var counts [totalBars]int
+
 	maxIdx := 0
 
-	for _, d := range durations {
-		idx := durationToBarIndex(d)
+	for _, duration := range durations {
+		idx := durationToBarIndex(duration)
+
 		counts[idx]++
+
 		if idx > maxIdx {
 			maxIdx = idx
 		}
 	}
 
 	bars := make([]HistogramBar, maxIdx+1)
-	for i := 0; i <= maxIdx; i++ {
-		bars[i] = HistogramBar{Label: durationToBarLabel(barIndexToSeconds(i)), Count: counts[i]}
+
+	for idx := 0; idx <= maxIdx; idx++ {
+		bars[idx] = HistogramBar{
+			Label: durationToBarLabel(barIndexToSeconds(idx)),
+			Count: counts[idx],
+		}
 	}
 
 	return bars, nil
 }
 
-func barIndexToSeconds(i int) int64 {
-	switch {
-	case i < 24:
-		return int64(i) * secondsInHour
-	case i < 54:
-		return int64(i-23) * secondsInDay
-	case i < 65:
-		return int64(i-53) * secondsInMonth
-	case i < 72:
-		return int64(i-64) * secondsInYear
-	default:
-		return 8 * secondsInYear
-	}
-}
-
-func buildIssuesDurationHistogram(rows []repository.IssueDuration) (IssuesDurationHistogram, error) {
+func buildIssuesDurationHistogram(
+	rows []repository.IssueDuration,
+) (IssuesDurationHistogram, error) {
 	durations := make([]int64, len(rows))
-	for i, r := range rows {
-		durations[i] = int64(r.Duration)
+	for i, row := range rows {
+		durations[i] = int64(row.Duration)
 	}
 
 	bars, err := buildMultiScaleHistogram(durations)
@@ -106,10 +133,12 @@ func buildIssuesDurationHistogram(rows []repository.IssueDuration) (IssuesDurati
 	return IssuesDurationHistogram{Bars: bars}, nil
 }
 
-func buildIssuesTimeSpentHistogram(rows []repository.IssueTimeSpent) (IssuesTimeSpentHistogram, error) {
+func buildIssuesTimeSpentHistogram(
+	rows []repository.IssueTimeSpent,
+) (IssuesTimeSpentHistogram, error) {
 	durations := make([]int64, len(rows))
-	for i, r := range rows {
-		durations[i] = int64(r.TimeSpent)
+	for i, row := range rows {
+		durations[i] = int64(row.TimeSpent)
 	}
 
 	bars, err := buildMultiScaleHistogram(durations)
@@ -126,8 +155,8 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 	}
 
 	byIssue := make(map[int][]repository.StatusTransition)
-	for _, r := range rows {
-		byIssue[r.IssueID] = append(byIssue[r.IssueID], r)
+	for _, row := range rows {
+		byIssue[row.IssueID] = append(byIssue[row.IssueID], row)
 	}
 
 	durationsByStatus := make(map[string][]int64)
@@ -139,25 +168,29 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 
 		for i := 0; i+1 < len(transitions); i++ {
 			d := transitions[i+1].ChangeTime.Unix() - transitions[i].ChangeTime.Unix()
-			if d < 0 {
-				d = 0
-			}
-			durationsByStatus[transitions[i].FromStatus] = append(durationsByStatus[transitions[i].FromStatus], d)
+			d = max(d, 0)
+			durationsByStatus[transitions[i].FromStatus] = append(
+				durationsByStatus[transitions[i].FromStatus],
+				d,
+			)
 		}
 	}
 
 	statuses := make([]string, 0, len(durationsByStatus))
-	for s := range durationsByStatus {
-		statuses = append(statuses, s)
+	for status := range durationsByStatus {
+		statuses = append(statuses, status)
 	}
+
 	sort.Strings(statuses)
 
 	result := make([]StatusHistogram, 0, len(statuses))
+
 	for _, status := range statuses {
 		bars, err := buildMultiScaleHistogram(durationsByStatus[status])
 		if err != nil {
 			continue
 		}
+
 		result = append(result, StatusHistogram{Status: status, Bars: bars})
 	}
 
@@ -166,7 +199,7 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 
 func buildDailyActivityChart(rows []repository.DailyActivity) (DailyActivityChart, error) {
 	if len(rows) == 0 {
-		return DailyActivityChart{}, nil
+		return DailyActivityChart{Points: nil}, nil
 	}
 
 	sort.Slice(rows, func(i, j int) bool {
@@ -174,16 +207,17 @@ func buildDailyActivityChart(rows []repository.DailyActivity) (DailyActivityChar
 	})
 
 	points := make([]DailyActivityPoint, len(rows))
+
 	var cumCreated, cumClosed int
 
-	for i, r := range rows {
-		cumCreated += r.Creation
-		cumClosed += r.Completion
+	for i, row := range rows {
+		cumCreated += row.Creation
+		cumClosed += row.Completion
 
 		points[i] = DailyActivityPoint{
-			Date:              r.Date,
-			Created:           r.Creation,
-			Closed:            r.Completion,
+			Date:              row.Date,
+			Created:           row.Creation,
+			Closed:            row.Completion,
 			CumulativeCreated: cumCreated,
 			CumulativeClosed:  cumClosed,
 		}
@@ -194,8 +228,9 @@ func buildDailyActivityChart(rows []repository.DailyActivity) (DailyActivityChar
 
 func buildPriorityChart(rows []repository.PriorityStats) PriorityChart {
 	bars := make([]PriorityBar, len(rows))
-	for i, r := range rows {
-		bars[i] = PriorityBar{Priority: r.Priority, Count: r.Count}
+	for i, row := range rows {
+		bars[i] = PriorityBar{Priority: row.Priority, Count: row.Count}
 	}
+
 	return PriorityChart{Bars: bars}
 }
