@@ -2,32 +2,25 @@ package service
 
 import "time"
 
-type DurationUnit string
-
-const (
-	UnitMinute DurationUnit = "minute"
-	UnitHour   DurationUnit = "hour"
-	UnitDay    DurationUnit = "day"
-	UnitMonth  DurationUnit = "month"
-	UnitYear   DurationUnit = "year"
-)
-
-const MaxYearBars = 8
+// HistogramBar — один столбец мультимасштабной гистограммы.
+// Label содержит человекочитаемое обозначение временного диапазона:
+// "0h"–"23h", "1day"–"30day", "1month"–"11month", "1year"–"7year", "8+year".
+type HistogramBar struct {
+	Label string
+	Count int
+}
 
 type IssuesDurationHistogram struct {
-	Unit DurationUnit
-	Bars []int
+	Bars []HistogramBar
 }
 
 type IssuesTimeSpentHistogram struct {
-	Unit DurationUnit
-	Bars []int
+	Bars []HistogramBar
 }
 
 type StatusHistogram struct {
 	Status string
-	Unit   DurationUnit
-	Bars   []int
+	Bars   []HistogramBar
 }
 
 type DailyActivityPoint struct {

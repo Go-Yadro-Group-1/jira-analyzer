@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
@@ -10,102 +11,122 @@ import (
 var ErrNoClosedIssues = errors.New("no closed issues to build histogram")
 
 const (
-	secondsInMinute = 60
-	secondsInHour   = 3600
-	secondsInDay    = 86400
-	secondsInMonth  = 30 * secondsInDay
-	secondsInYear   = 365 * secondsInDay
+	secondsInHour  = 3600
+	secondsInDay   = 86400
+	secondsInMonth = 30 * secondsInDay
+	secondsInYear  = 365 * secondsInDay
 )
 
-func chooseUnit(maxDuration int64) DurationUnit {
+// Мультимасштабная гистограмма: до 73 столбцов (ОФ2.1.3, ОФ2.1.4).
+//
+// Зоны:
+//   < 1 дня    → "0h"–"23h"          (24 столбца)
+//   < 1 месяца → "1day"–"30day"       (30 столбцов)
+//   < 1 года   → "1month"–"11month"   (11 столбцов)
+//   ≥ 1 года   → "1year"–"7year", "8+year" (8 столбцов)
+
+func durationToBarLabel(seconds int64) string {
 	switch {
-	case maxDuration < secondsInHour:
-		return UnitMinute
-	case maxDuration < secondsInDay:
-		return UnitHour
-	case maxDuration < secondsInMonth:
-		return UnitDay
-	case maxDuration < secondsInYear:
-		return UnitMonth
+	case seconds < secondsInDay:
+		return fmt.Sprintf("%dh", seconds/secondsInHour)
+	case seconds < secondsInMonth:
+		return fmt.Sprintf("%dday", seconds/secondsInDay)
+	case seconds < secondsInYear:
+		return fmt.Sprintf("%dmonth", seconds/secondsInMonth)
 	default:
-		return UnitYear
+		if y := seconds / secondsInYear; y >= 8 {
+			return "8+year"
+		} else {
+			return fmt.Sprintf("%dyear", y)
+		}
 	}
 }
 
-func durationToBucket(seconds int64, unit DurationUnit) int {
-	switch unit {
-	case UnitMinute:
-		return int(seconds / secondsInMinute)
-	case UnitHour:
+func durationToBarIndex(seconds int64) int {
+	switch {
+	case seconds < secondsInDay:
 		return int(seconds / secondsInHour)
-	case UnitDay:
-		return int(seconds / secondsInDay)
-	case UnitMonth:
-		return int(seconds / secondsInMonth)
-	case UnitYear:
-		bucket := int(seconds / secondsInYear)
-		if bucket >= MaxYearBars {
-			return MaxYearBars - 1
-		}
-		return bucket
+	case seconds < secondsInMonth:
+		return 23 + int(seconds/secondsInDay)
+	case seconds < secondsInYear:
+		return 53 + int(seconds/secondsInMonth)
 	default:
-		return 0
+		y := int(seconds / secondsInYear)
+		if y >= 8 {
+			return 72
+		}
+		return 64 + y
 	}
 }
 
-func buildDurationHistogram(durations []int64) (DurationUnit, []int, error) {
+func buildMultiScaleHistogram(durations []int64) ([]HistogramBar, error) {
 	if len(durations) == 0 {
-		return 0, nil, ErrNoClosedIssues
+		return nil, ErrNoClosedIssues
 	}
 
-	var maxDuration int64
+	const totalBars = 73
+
+	var counts [totalBars]int
+	maxIdx := 0
+
 	for _, d := range durations {
-		if d > maxDuration {
-			maxDuration = d
+		idx := durationToBarIndex(d)
+		counts[idx]++
+		if idx > maxIdx {
+			maxIdx = idx
 		}
 	}
 
-	unit := chooseUnit(maxDuration)
-	size := durationToBucket(maxDuration, unit) + 1
-
-	if unit == UnitYear && size < MaxYearBars {
-		size = MaxYearBars
+	bars := make([]HistogramBar, maxIdx+1)
+	for i := 0; i <= maxIdx; i++ {
+		bars[i] = HistogramBar{Label: durationToBarLabel(barIndexToSeconds(i)), Count: counts[i]}
 	}
 
-	bars := make([]int, size)
-	for _, d := range durations {
-		bars[durationToBucket(d, unit)]++
-	}
+	return bars, nil
+}
 
-	return unit, bars, nil
+// barIndexToSeconds возвращает нижнюю границу временного диапазона для столбца с индексом i.
+func barIndexToSeconds(i int) int64 {
+	switch {
+	case i < 24:
+		return int64(i) * secondsInHour
+	case i < 54:
+		return int64(i-23) * secondsInDay
+	case i < 65:
+		return int64(i-53) * secondsInMonth
+	case i < 72:
+		return int64(i-64) * secondsInYear
+	default:
+		return 8 * secondsInYear
+	}
 }
 
 func buildIssuesDurationHistogram(rows []repository.IssueDuration) (IssuesDurationHistogram, error) {
 	durations := make([]int64, len(rows))
 	for i, r := range rows {
-		durations[i] = r.Duration
+		durations[i] = int64(r.Duration)
 	}
 
-	unit, bars, err := buildDurationHistogram(durations)
+	bars, err := buildMultiScaleHistogram(durations)
 	if err != nil {
 		return IssuesDurationHistogram{}, err
 	}
 
-	return IssuesDurationHistogram{Unit: unit, Bars: bars}, nil
+	return IssuesDurationHistogram{Bars: bars}, nil
 }
 
 func buildIssuesTimeSpentHistogram(rows []repository.IssueTimeSpent) (IssuesTimeSpentHistogram, error) {
 	durations := make([]int64, len(rows))
 	for i, r := range rows {
-		durations[i] = r.TimeSpent
+		durations[i] = int64(r.TimeSpent)
 	}
 
-	unit, bars, err := buildDurationHistogram(durations)
+	bars, err := buildMultiScaleHistogram(durations)
 	if err != nil {
 		return IssuesTimeSpentHistogram{}, err
 	}
 
-	return IssuesTimeSpentHistogram{Unit: unit, Bars: bars}, nil
+	return IssuesTimeSpentHistogram{Bars: bars}, nil
 }
 
 func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogram, error) {
@@ -113,32 +134,41 @@ func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogra
 		return nil, ErrNoClosedIssues
 	}
 
+	// Группируем переходы по задаче, чтобы не смешивать длительности разных задач.
+	byIssue := make(map[int][]repository.StatusTransition)
+	for _, r := range rows {
+		byIssue[r.IssueID] = append(byIssue[r.IssueID], r)
+	}
+
 	durationsByStatus := make(map[string][]int64)
 
-	for i := 0; i+1 < len(rows); i++ {
-		duration := rows[i+1].ChangeTime.Unix() - rows[i].ChangeTime.Unix()
-		if duration < 0 {
-			duration = 0
+	for _, transitions := range byIssue {
+		sort.Slice(transitions, func(i, j int) bool {
+			return transitions[i].ChangeTime.Before(transitions[j].ChangeTime)
+		})
+
+		for i := 0; i+1 < len(transitions); i++ {
+			d := transitions[i+1].ChangeTime.Unix() - transitions[i].ChangeTime.Unix()
+			if d < 0 {
+				d = 0
+			}
+			durationsByStatus[transitions[i].FromStatus] = append(durationsByStatus[transitions[i].FromStatus], d)
 		}
-		durationsByStatus[rows[i].FromStatus] = append(durationsByStatus[rows[i].FromStatus], duration)
 	}
 
 	statuses := make([]string, 0, len(durationsByStatus))
 	for s := range durationsByStatus {
 		statuses = append(statuses, s)
 	}
-
 	sort.Strings(statuses)
 
 	result := make([]StatusHistogram, 0, len(statuses))
-
 	for _, status := range statuses {
-		unit, bars, err := buildDurationHistogram(durationsByStatus[status])
+		bars, err := buildMultiScaleHistogram(durationsByStatus[status])
 		if err != nil {
 			continue
 		}
-
-		result = append(result, StatusHistogram{Status: status, Unit: unit, Bars: bars})
+		result = append(result, StatusHistogram{Status: status, Bars: bars})
 	}
 
 	return result, nil
@@ -177,6 +207,5 @@ func buildPriorityChart(rows []repository.PriorityStats) PriorityChart {
 	for i, r := range rows {
 		bars[i] = PriorityBar{Priority: r.Priority, Count: r.Count}
 	}
-
 	return PriorityChart{Bars: bars}
 }
