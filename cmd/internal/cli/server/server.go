@@ -5,11 +5,21 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
+	analyzerv1 "github.com/Go-Yadro-Group-1/Jira-Analyzer/gen/grpc/analyzer/v1"
+	grpchandler "github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/handler/grpc"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository/memory"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository/postgres"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
 	_ "github.com/lib/pq" // postgres driver
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -48,7 +58,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	defer conn.Close()
 
-	err = startServer(cmd, cfg)
+	err = startServer(cmd, conn)
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
@@ -95,7 +105,7 @@ func connectDB(ctx context.Context, cfg *config.Config) (*sql.DB, error) {
 	return conn, nil
 }
 
-func startServer(cmd *cobra.Command, _ *config.Config) error {
+func startServer(cmd *cobra.Command, database *sql.DB) error {
 	host, err := cmd.Flags().GetString("host")
 	if err != nil {
 		return fmt.Errorf("get host flag: %w", err)
@@ -106,7 +116,38 @@ func startServer(cmd *cobra.Command, _ *config.Config) error {
 		return fmt.Errorf("get port flag: %w", err)
 	}
 
-	log.Printf("starting gRPC server on %s:%d\n", host, port)
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	lc := net.ListenConfig{} //nolint:exhaustruct
+
+	lis, err := lc.Listen(cmd.Context(), "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+
+	repo := postgres.New(database)
+	cache := memory.NewCacheRepository[int, string]()
+	svc := service.New(repo, cache)
+	handler := grpchandler.New(svc)
+
+	grpcServer := grpc.NewServer()
+	analyzerv1.RegisterAnalyzerServiceServer(grpcServer, handler)
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-quit
+		log.Println("shutting down gRPC server...")
+		grpcServer.GracefulStop()
+	}()
+
+	log.Printf("gRPC server listening on %s\n", addr)
+
+	err = grpcServer.Serve(lis)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
 
 	return nil
 }
