@@ -16,22 +16,51 @@ import (
 	"github.com/spf13/viper"
 )
 
-const defaultConfig = "config/dev.yaml"
+const (
+	defaultConfig  = "config/dev.yaml"
+	noVersionValue = 0
+)
+
+var errInvalidDownVersion = errors.New("--down value must be >= 0")
 
 //nolint:exhaustruct
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "migrate",
-		Short:        "Run database migrations",
-		Long:         "Apply database migrations. Without --version applies all available migrations (up).",
+		Use:   "migrate",
+		Short: "Run database migrations",
+		Long: "Apply or roll back database migrations.\n" +
+			"  --version N   apply up to version N (0 = apply all)\n" +
+			"  --down N      roll back to version N (0 = roll back all)\n" +
+			"  --force N     force-set version N to clear dirty state",
 		RunE:         run,
 		SilenceUsage: true,
 	}
 
 	cmd.Flags().String("config", defaultConfig, "path to config file")
-	cmd.Flags().Uint("version", 0, "target migration version (0 = apply all up)")
+	cmd.Flags().Uint(
+		"version", noVersionValue, "target migration version to apply up to (0 = apply all up)",
+	)
+	cmd.Flags().Int(
+		"down", -1, "roll back to this migration version (0 = roll back all, omit = no rollback)",
+	)
+	cmd.Flags().Int(
+		"force", -1, "force-set schema version without running migrations, clears dirty state",
+	)
 
 	return cmd
+}
+
+type direction int
+
+const (
+	directionUp    direction = iota
+	directionDown  direction = iota
+	directionForce direction = iota
+)
+
+type migrateParams struct {
+	direction direction
+	version   uint
 }
 
 func run(cmd *cobra.Command, _ []string) error {
@@ -40,9 +69,9 @@ func run(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	version, err := cmd.Flags().GetUint("version")
+	params, err := parseFlags(cmd)
 	if err != nil {
-		return fmt.Errorf("get version flag: %w", err)
+		return err
 	}
 
 	database, err := sql.Open("postgres", cfg.DB.DSN())
@@ -51,12 +80,47 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	defer database.Close()
 
-	err = runMigrations(database, version)
+	err = runMigrations(database, params)
 	if err != nil {
 		return fmt.Errorf("run migrations: %w", err)
 	}
 
 	return nil
+}
+
+func parseFlags(cmd *cobra.Command) (migrateParams, error) {
+	if cmd.Flags().Changed("force") {
+		forceVal, err := cmd.Flags().GetInt("force")
+		if err != nil {
+			return migrateParams{}, fmt.Errorf("get force flag: %w", err)
+		}
+
+		if forceVal < 0 {
+			return migrateParams{}, errors.New("--force value must be >= 0") //nolint:err113
+		}
+
+		return migrateParams{direction: directionForce, version: uint(forceVal)}, nil //nolint:gosec
+	}
+
+	if cmd.Flags().Changed("down") {
+		downVal, err := cmd.Flags().GetInt("down")
+		if err != nil {
+			return migrateParams{}, fmt.Errorf("get down flag: %w", err)
+		}
+
+		if downVal < 0 {
+			return migrateParams{}, errInvalidDownVersion
+		}
+
+		return migrateParams{direction: directionDown, version: uint(downVal)}, nil //nolint:gosec
+	}
+
+	upVersion, err := cmd.Flags().GetUint("version")
+	if err != nil {
+		return migrateParams{}, fmt.Errorf("get version flag: %w", err)
+	}
+
+	return migrateParams{direction: directionUp, version: upVersion}, nil
 }
 
 func loadConfig(cmd *cobra.Command) (*config.Config, error) {
@@ -84,7 +148,7 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	return cfg, nil
 }
 
-func runMigrations(database *sql.DB, version uint) error {
+func runMigrations(database *sql.DB, params migrateParams) error {
 	sourceDriver, err := iofs.New(migrations.FS, ".")
 	if err != nil {
 		return fmt.Errorf("create iofs source: %w", err)
@@ -101,19 +165,43 @@ func runMigrations(database *sql.DB, version uint) error {
 	}
 	defer migrator.Close()
 
-	if version == 0 {
-		err = migrator.Up()
-	} else {
-		err = migrator.Migrate(version)
-	}
+	err = applyMigration(migrator, params)
 
 	switch {
 	case err == nil:
 		log.Println("migrations applied successfully")
 	case errors.Is(err, migrate.ErrNoChange):
-		log.Println("no new migrations to apply")
+		log.Println("no changes to apply")
 	default:
 		return fmt.Errorf("migrate: %w", err)
+	}
+
+	return nil
+}
+
+func applyMigration(migrator *migrate.Migrate, params migrateParams) error {
+	switch params.direction {
+	case directionForce:
+		err := migrator.Force(int(params.version)) //nolint:gosec
+		if err != nil {
+			return fmt.Errorf("force version %d: %w", params.version, err)
+		}
+
+		return nil
+
+	case directionDown:
+		if params.version == noVersionValue {
+			return migrator.Down() //nolint:wrapcheck
+		}
+
+		return migrator.Migrate(params.version) //nolint:wrapcheck
+
+	case directionUp:
+		if params.version == noVersionValue {
+			return migrator.Up() //nolint:wrapcheck
+		}
+
+		return migrator.Migrate(params.version) //nolint:wrapcheck
 	}
 
 	return nil
