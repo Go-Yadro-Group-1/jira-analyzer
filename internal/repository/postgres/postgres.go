@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"time"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 )
@@ -23,6 +24,7 @@ func mustQuery(name string) string {
 
 // nolint: gochecknoglobals
 var (
+	getProjectLastUpdatedQuery         = mustQuery("get_project_last_updated.sql")
 	getStatsByProjectQuery             = mustQuery("get_stats_by_project.sql")
 	getIssuesDurationByProjectQuery    = mustQuery("get_issues_duration_by_project.sql")
 	getStatusTransitionsByProjectQuery = mustQuery("get_status_transitions_by_project.sql")
@@ -61,6 +63,20 @@ func New(db *sql.DB) *Postgres {
 	return &Postgres{
 		db: db,
 	}
+}
+
+func (p *Postgres) GetProjectLastUpdated(
+	ctx context.Context,
+	projectID int,
+) (time.Time, error) {
+	var t time.Time
+
+	err := p.db.QueryRowContext(ctx, getProjectLastUpdatedQuery, projectID).Scan(&t)
+	if err != nil {
+		return time.Time{}, newProjectErr("get last updated", projectID, err)
+	}
+
+	return t, nil
 }
 
 func (p *Postgres) GetStatsByProject(

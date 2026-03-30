@@ -1,0 +1,90 @@
+@startuml
+title Raw Data Schema (migration 000001_init_raw_data_scheme.up.sql)
+
+hide methods
+hide stereotypes
+left to right direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam defaultTextAlignment left
+skinparam nodesep 60
+skinparam ranksep 100
+skinparam ArrowColor #5A6F85
+skinparam ArrowThickness 1
+
+skinparam package {
+  BackgroundColor #F5F9FC
+  BorderColor #8DA2B8
+  RoundCorner 10
+}
+
+skinparam entity {
+  BackgroundColor #FFFDF6
+  BorderColor #BFA35A
+  FontColor #2A2A2A
+  RoundCorner 8
+}
+
+skinparam entity<<core>> {
+  BackgroundColor #EAF4FF
+  BorderColor #3B6EA5
+}
+
+skinparam entity<<ref>> {
+  BackgroundColor #F8FFF2
+  BorderColor #6D9D3C
+}
+
+skinparam entity<<event>> {
+  BackgroundColor #FFF7F8
+  BorderColor #C96F7A
+}
+
+package "Schema: raw" as raw_schema {
+entity "raw.project" as project <<ref>> {
+  *id : INT <<PK>>
+  --
+  title : TEXT <<NOT NULL>>
+}
+
+entity "raw.author" as author <<ref>> {
+  *id : INT <<PK>>
+  --
+  name : TEXT <<NOT NULL>>
+}
+
+entity "raw.issue" as issue <<core>> {
+  *id : INT <<PK>>
+  --
+  project_id : INT <<FK, NOT NULL>>
+  author_id : INT <<FK, NOT NULL>>
+  assignee_id : INT <<FK, NULL>>
+  key : TEXT <<NOT NULL>>
+  summary : TEXT
+  description : TEXT
+  type : TEXT
+  priority : TEXT
+  status : TEXT
+  created_time : TIMESTAMP
+  closed_time : TIMESTAMP
+  updated_time : TIMESTAMP
+  time_spent : INT
+}
+
+entity "raw.status_changes" as status_changes <<event>> {
+  issue_id : INT <<FK, NOT NULL>>
+  author_id : INT <<FK, NOT NULL>>
+  change_time : TIMESTAMP <<NOT NULL>>
+  from_status : TEXT
+  to_status : TEXT
+}
+}
+
+project ||--o{ issue : project_id -> id
+author ||--o{ issue : author_id -> id
+author ||--o{ issue : assignee_id -> id (nullable)
+issue ||--o{ status_changes : issue_id -> id
+author ||--o{ status_changes : author_id -> id
+
+
+@enduml
