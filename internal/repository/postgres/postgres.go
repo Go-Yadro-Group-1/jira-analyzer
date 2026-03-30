@@ -53,6 +53,8 @@ func newProjectErr(action string, projectID int, err error) error {
 	}
 }
 
+var _ repository.AnalyticsRepository = (*Postgres)(nil)
+
 type Postgres struct {
 	db *sql.DB
 }
