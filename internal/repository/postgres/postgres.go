@@ -69,14 +69,14 @@ func (p *Postgres) GetProjectLastUpdated(
 	ctx context.Context,
 	projectID int,
 ) (time.Time, error) {
-	var t time.Time
+	var timeT time.Time
 
-	err := p.db.QueryRowContext(ctx, getProjectLastUpdatedQuery, projectID).Scan(&t)
+	err := p.db.QueryRowContext(ctx, getProjectLastUpdatedQuery, projectID).Scan(&timeT)
 	if err != nil {
 		return time.Time{}, newProjectErr("get last updated", projectID, err)
 	}
 
-	return t, nil
+	return timeT, nil
 }
 
 func (p *Postgres) GetStatsByProject(

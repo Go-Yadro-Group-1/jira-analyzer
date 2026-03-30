@@ -410,3 +410,34 @@ func mkDailyActivity(date time.Time, creation, completion int) repository.DailyA
 		Completion: completion,
 	}
 }
+
+func TestGetProjectLastUpdated(t *testing.T) {
+	t.Parallel()
+
+	repo := postgres.New(database)
+
+	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
+	defer cancel()
+
+	got, err := repo.GetProjectLastUpdated(ctx, 1)
+	require.NoError(t, err)
+
+	// MAX(updated_time) для проекта 1 — NOW() - INTERVAL '1 day' (issue 3 и 6)
+	expected := time.Now().Add(-24 * time.Hour)
+	require.WithinDuration(t, expected, got, 10*time.Second)
+}
+
+func TestGetProjectLastUpdatedEmpty(t *testing.T) {
+	t.Parallel()
+
+	repo := postgres.New(database)
+
+	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
+	defer cancel()
+
+	// Для несуществующего проекта COALESCE вернёт '1970-01-01'
+	got, err := repo.GetProjectLastUpdated(ctx, 999)
+	require.NoError(t, err)
+
+	require.Equal(t, time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), got.UTC())
+}
