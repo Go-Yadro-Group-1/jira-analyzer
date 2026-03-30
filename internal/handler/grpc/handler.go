@@ -1,5 +1,7 @@
 package grpchandler
 
+//go:generate mockgen -destination=mocks/mock_service.go -package=mocks github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/handler/grpc Service
+
 import (
 	"context"
 	"errors"
