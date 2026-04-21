@@ -8,7 +8,6 @@ import (
 	analyzerv1 "github.com/Go-Yadro-Group-1/Jira-Analyzer/gen/grpc/analyzer/v1"
 	grpchandler "github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/handler/grpc"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/handler/grpc/mocks"
-	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,15 +106,15 @@ func TestGetStats_Success(t *testing.T) {
 
 	handler, svc := newHandler(t)
 
-	stats := repository.ProjectStats{
-		CountTotal:           100,
-		CountOpen:            20,
-		CountClosed:          60,
-		CountReopened:        5,
-		CountResolved:        10,
-		CountInProgress:      5,
-		TotalDurationClosed:  600,
-		CountCreatedLastWeek: 14,
+	stats := service.ProjectStats{
+		CountTotal:               100,
+		CountOpen:                20,
+		CountClosed:              60,
+		CountReopened:            5,
+		CountResolved:            10,
+		CountInProgress:          5,
+		AvgCompletionTimeHours:   10.5,
+		AvgCreatedPerDayLastWeek: 2.0,
 	}
 
 	svc.EXPECT().GetProjectStat(gomock.Any(), 7).Return(stats, nil)
@@ -132,23 +131,8 @@ func TestGetStats_Success(t *testing.T) {
 	assert.Equal(t, int32(5), got.GetCountReopened())
 	assert.Equal(t, int32(10), got.GetCountResolved())
 	assert.Equal(t, int32(5), got.GetCountInProgress())
-	assert.InDelta(t, float32(10.0), got.GetAvgDurationClosed(), 0.001) // 600/60
-	assert.InDelta(t, float32(2.0), got.GetAvgCreatedPerDay(), 0.001)   // 14/7
-}
-
-func TestGetStats_ZeroClosedCount(t *testing.T) {
-	t.Parallel()
-
-	handler, svc := newHandler(t)
-
-	svc.EXPECT().
-		GetProjectStat(gomock.Any(), 1).
-		Return(repository.ProjectStats{CountClosed: 0, TotalDurationClosed: 999}, nil)
-
-	resp, err := handler.GetStats(context.Background(), &analyzerv1.GetStatsRequest{ProjectId: 1})
-
-	require.NoError(t, err)
-	assert.InDelta(t, float32(0), resp.GetStats().GetAvgDurationClosed(), 0.001)
+	assert.InDelta(t, float32(10.5), got.GetAvgDurationClosed(), 0.001)
+	assert.InDelta(t, float32(2.0), got.GetAvgCreatedPerDayLastWeek(), 0.001)
 }
 
 func TestGetStats_ServiceError(t *testing.T) {
@@ -156,7 +140,7 @@ func TestGetStats_ServiceError(t *testing.T) {
 
 	handler, svc := newHandler(t)
 
-	svc.EXPECT().GetProjectStat(gomock.Any(), 1).Return(repository.ProjectStats{}, errService)
+	svc.EXPECT().GetProjectStat(gomock.Any(), 1).Return(service.ProjectStats{}, errService)
 
 	_, err := handler.GetStats(context.Background(), &analyzerv1.GetStatsRequest{ProjectId: 1})
 
@@ -171,12 +155,11 @@ func TestCompareProjects_Success(t *testing.T) {
 
 	handler, svc := newHandler(t)
 
-	statsA := repository.ProjectStats{CountTotal: 10, CountClosed: 5, TotalDurationClosed: 50}
-	statsB := repository.ProjectStats{CountTotal: 20, CountClosed: 10, TotalDurationClosed: 200}
+	statsA := service.ProjectStats{CountTotal: 10, CountClosed: 5, AvgCompletionTimeHours: 10.0}
+	statsB := service.ProjectStats{CountTotal: 20, CountClosed: 10, AvgCompletionTimeHours: 20.0}
 
-	svc.EXPECT().
-		CompareTwoProjects(gomock.Any(), 1, 2).
-		Return([2]repository.ProjectStats{statsA, statsB}, nil)
+	svc.EXPECT().GetProjectStat(gomock.Any(), 1).Return(statsA, nil)
+	svc.EXPECT().GetProjectStat(gomock.Any(), 2).Return(statsB, nil)
 
 	resp, err := handler.CompareProjects(context.Background(), &analyzerv1.CompareProjectsRequest{
 		ProjectIdA: 1,
@@ -186,18 +169,33 @@ func TestCompareProjects_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(10), resp.GetProjectA().GetCountTotal())
 	assert.Equal(t, int32(20), resp.GetProjectB().GetCountTotal())
-	assert.InDelta(t, float32(10.0), resp.GetProjectA().GetAvgDurationClosed(), 0.001) // 50/5
-	assert.InDelta(t, float32(20.0), resp.GetProjectB().GetAvgDurationClosed(), 0.001) // 200/10
+	assert.InDelta(t, float32(10.0), resp.GetProjectA().GetAvgDurationClosed(), 0.001)
+	assert.InDelta(t, float32(20.0), resp.GetProjectB().GetAvgDurationClosed(), 0.001)
 }
 
-func TestCompareProjects_ServiceError(t *testing.T) {
+func TestCompareProjects_FirstProjectError(t *testing.T) {
 	t.Parallel()
 
 	handler, svc := newHandler(t)
 
-	svc.EXPECT().
-		CompareTwoProjects(gomock.Any(), 1, 2).
-		Return([2]repository.ProjectStats{}, errService)
+	svc.EXPECT().GetProjectStat(gomock.Any(), 1).Return(service.ProjectStats{}, errService)
+
+	_, err := handler.CompareProjects(context.Background(), &analyzerv1.CompareProjectsRequest{
+		ProjectIdA: 1,
+		ProjectIdB: 2,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestCompareProjects_SecondProjectError(t *testing.T) {
+	t.Parallel()
+
+	handler, svc := newHandler(t)
+
+	svc.EXPECT().GetProjectStat(gomock.Any(), 1).Return(service.ProjectStats{CountTotal: 1}, nil)
+	svc.EXPECT().GetProjectStat(gomock.Any(), 2).Return(service.ProjectStats{}, errService)
 
 	_, err := handler.CompareProjects(context.Background(), &analyzerv1.CompareProjectsRequest{
 		ProjectIdA: 1,

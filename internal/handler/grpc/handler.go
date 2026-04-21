@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	analyzerv1 "github.com/Go-Yadro-Group-1/Jira-Analyzer/gen/grpc/analyzer/v1"
-	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,11 +15,7 @@ import (
 
 type Service interface {
 	GetChart(ctx context.Context, projectID int, chartType service.ChartType) ([]byte, error)
-	GetProjectStat(ctx context.Context, projectID int) (repository.ProjectStats, error)
-	CompareTwoProjects(
-		ctx context.Context,
-		lhsProjectID, rhsProjectID int,
-	) ([2]repository.ProjectStats, error)
+	GetProjectStat(ctx context.Context, projectID int) (service.ProjectStats, error)
 }
 
 type Handler struct {
@@ -42,7 +37,7 @@ func (h *Handler) GetChart(
 ) (*analyzerv1.GetChartResponse, error) {
 	chartType, err := protoChartTypeToService(req.GetChartType())
 	if err != nil {
-		return nil, fmt.Errorf("get chart: %w", status.Error(codes.InvalidArgument, err.Error()))
+		return nil, toGRPCError(err)
 	}
 
 	data, err := h.svc.GetChart(ctx, int(req.GetProjectId()), chartType)
@@ -69,18 +64,19 @@ func (h *Handler) CompareProjects(
 	ctx context.Context,
 	req *analyzerv1.CompareProjectsRequest,
 ) (*analyzerv1.CompareProjectsResponse, error) {
-	results, err := h.svc.CompareTwoProjects(
-		ctx,
-		int(req.GetProjectIdA()),
-		int(req.GetProjectIdB()),
-	)
+	statsA, err := h.svc.GetProjectStat(ctx, int(req.GetProjectIdA()))
+	if err != nil {
+		return nil, toGRPCError(err)
+	}
+
+	statsB, err := h.svc.GetProjectStat(ctx, int(req.GetProjectIdB()))
 	if err != nil {
 		return nil, toGRPCError(err)
 	}
 
 	return &analyzerv1.CompareProjectsResponse{
-		ProjectA: statsToProto(results[0]),
-		ProjectB: statsToProto(results[1]),
+		ProjectA: statsToProto(statsA),
+		ProjectB: statsToProto(statsB),
 	}, nil
 }
 
@@ -103,29 +99,16 @@ func protoChartTypeToService(ct analyzerv1.ChartType) (service.ChartType, error)
 	return "", service.ErrUnknownChartType
 }
 
-func statsToProto(stats repository.ProjectStats) *analyzerv1.Stats {
-	var avgDurationClosed float32
-	if stats.CountClosed > 0 {
-		avgDurationClosed = float32(
-			stats.TotalDurationClosed,
-		) / float32(
-			stats.CountClosed,
-		) //nolint:gosec
-	}
-
-	const daysInWeek = 7
-
-	avgCreatedPerDay := float32(stats.CountCreatedLastWeek) / daysInWeek //nolint:gosec
-
+func statsToProto(stats service.ProjectStats) *analyzerv1.Stats {
 	return &analyzerv1.Stats{
-		CountTotal:        int32(stats.CountTotal),      //nolint:gosec
-		CountOpen:         int32(stats.CountOpen),       //nolint:gosec
-		CountClosed:       int32(stats.CountClosed),     //nolint:gosec
-		CountReopened:     int32(stats.CountReopened),   //nolint:gosec
-		CountResolved:     int32(stats.CountResolved),   //nolint:gosec
-		CountInProgress:   int32(stats.CountInProgress), //nolint:gosec
-		AvgDurationClosed: avgDurationClosed,
-		AvgCreatedPerDay:  avgCreatedPerDay,
+		CountTotal:               int32(stats.CountTotal),      //nolint:gosec
+		CountOpen:                int32(stats.CountOpen),       //nolint:gosec
+		CountClosed:              int32(stats.CountClosed),     //nolint:gosec
+		CountReopened:            int32(stats.CountReopened),   //nolint:gosec
+		CountResolved:            int32(stats.CountResolved),   //nolint:gosec
+		CountInProgress:          int32(stats.CountInProgress), //nolint:gosec
+		AvgDurationClosed:        float32(stats.AvgCompletionTimeHours),
+		AvgCreatedPerDayLastWeek: float32(stats.AvgCreatedPerDayLastWeek),
 	}
 }
 
