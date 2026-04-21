@@ -1,6 +1,6 @@
 module github.com/Go-Yadro-Group-1/Jira-Analyzer
 
-go 1.24.4
+go 1.25.0
 
 require (
 	github.com/go-playground/validator/v10 v10.30.1
@@ -10,6 +10,8 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.36.0
+	go.uber.org/mock v0.6.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/grpc v1.79.1
 	google.golang.org/protobuf v1.36.11
 )

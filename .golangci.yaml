@@ -13,6 +13,13 @@ linters:
     varnamelen:
       ignore-names:
         - ok
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - generic
   default: all
   disable:
     - depguard
@@ -35,6 +42,7 @@ linters:
           - dupl
           - gosec
           - noinlineerr
+          - exhaustruct
 
 formatters:
   enable:

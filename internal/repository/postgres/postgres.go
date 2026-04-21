@@ -150,7 +150,7 @@ func (p *Postgres) GetStatusTransitionsByProject(
 	for rows.Next() {
 		var item repository.StatusTransition
 
-		err := rows.Scan(&item.ChangeTime, &item.FromStatus, &item.ToStatus)
+		err := rows.Scan(&item.IssueID, &item.ChangeTime, &item.FromStatus, &item.ToStatus)
 		if err != nil {
 			return nil, newProjectErr("scan status transition", projectID, err)
 		}
