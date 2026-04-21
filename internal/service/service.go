@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
-	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -198,71 +197,6 @@ func (s *Service) GetChart(
 	default:
 		return nil, ErrUnknownChartType
 	}
-}
-
-func (s *Service) CompareTwoProjects(
-	ctx context.Context,
-	lhsProjectID, rhsProjectID int,
-) ([2]ProjectStats, error) {
-	var result [2]ProjectStats
-
-	group, ctx := errgroup.WithContext(ctx)
-
-	group.Go(func() error {
-		var err error
-
-		result[0], err = s.GetProjectStat(ctx, lhsProjectID)
-
-		return err
-	})
-
-	group.Go(func() error {
-		var err error
-
-		result[1], err = s.GetProjectStat(ctx, rhsProjectID)
-
-		return err
-	})
-
-	err := group.Wait()
-	if err != nil {
-		return [2]ProjectStats{}, fmt.Errorf("compare projects: %w", err)
-	}
-
-	return result, nil
-}
-
-func (s *Service) CompareProjectsCharts(
-	ctx context.Context,
-	lhsProjectID, rhsProjectID int,
-	chartType ChartType,
-) ([2][]byte, error) {
-	var result [2][]byte
-
-	group, ctx := errgroup.WithContext(ctx)
-
-	group.Go(func() error {
-		var err error
-
-		result[0], err = s.GetChart(ctx, lhsProjectID, chartType)
-
-		return err
-	})
-
-	group.Go(func() error {
-		var err error
-
-		result[1], err = s.GetChart(ctx, rhsProjectID, chartType)
-
-		return err
-	})
-
-	err := group.Wait()
-	if err != nil {
-		return [2][]byte{}, fmt.Errorf("compare projects charts: %w", err)
-	}
-
-	return result, nil
 }
 
 func (s *Service) isCacheStale(ctx context.Context, projectID int) (bool, error) {
