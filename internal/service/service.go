@@ -73,8 +73,18 @@ const dataTypeStats = "stats"
 func (s *Service) GetProjectStat(
 	ctx context.Context,
 	projectID int,
-) (repository.ProjectStats, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeStats, s.repository.GetStatsByProject)
+) (ProjectStats, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeStats,
+		func(ctx context.Context, projectID int) (ProjectStats, error) {
+			raw, err := s.repository.GetStatsByProject(ctx, projectID)
+			if err != nil {
+				return ProjectStats{}, fmt.Errorf("get stats by project: %w", err)
+			}
+
+			return toProjectStats(raw), nil
+		},
+	)
 }
 
 const dataTypeIssuesDuration = "issues_duration"
@@ -193,8 +203,8 @@ func (s *Service) GetChart(
 func (s *Service) CompareTwoProjects(
 	ctx context.Context,
 	lhsProjectID, rhsProjectID int,
-) ([2]repository.ProjectStats, error) {
-	var result [2]repository.ProjectStats
+) ([2]ProjectStats, error) {
+	var result [2]ProjectStats
 
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -216,7 +226,7 @@ func (s *Service) CompareTwoProjects(
 
 	err := group.Wait()
 	if err != nil {
-		return [2]repository.ProjectStats{}, fmt.Errorf("compare projects: %w", err)
+		return [2]ProjectStats{}, fmt.Errorf("compare projects: %w", err)
 	}
 
 	return result, nil
