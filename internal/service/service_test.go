@@ -202,6 +202,60 @@ func TestGetChart_RepoError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestGetChart_RepoError_AllChartTypes(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+
+	tests := []struct {
+		chartType   service.ChartType
+		setupRepo   func(*mocks.MockRepository)
+	}{
+		{
+			chartType: service.ChartTypeStateDistribution,
+			setupRepo: func(repo *mocks.MockRepository) {
+				repo.EXPECT().GetStatusTransitionsByProject(gomock.Any(), 1).Return(nil, errDB)
+			},
+		},
+		{
+			chartType: service.ChartTypeDailyActivity,
+			setupRepo: func(repo *mocks.MockRepository) {
+				repo.EXPECT().GetDailyActivityByProject(gomock.Any(), 1).Return(nil, errDB)
+			},
+		},
+		{
+			chartType: service.ChartTypeComplexityHistogram,
+			setupRepo: func(repo *mocks.MockRepository) {
+				repo.EXPECT().GetIssuesTimeSpentByProject(gomock.Any(), 1).Return(nil, errDB)
+			},
+		},
+		{
+			chartType: service.ChartTypePriority,
+			setupRepo: func(repo *mocks.MockRepository) {
+				repo.EXPECT().GetPriorityStatsByProject(gomock.Any(), 1).Return(nil, errDB)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.chartType), func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			repo := mocks.NewMockRepository(ctrl)
+			cache := mocks.NewMockCache(ctrl)
+
+			repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(now, nil)
+			cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(time.Time{}, errCache)
+			tt.setupRepo(repo)
+
+			_, err := service.New(repo, cache).GetChart(context.Background(), 1, tt.chartType)
+
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestGetProjectStat(t *testing.T) {
 	t.Parallel()
 
