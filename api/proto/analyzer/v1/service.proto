@@ -42,7 +42,7 @@ message Stats {
   int32 count_resolved = 5;
   int32 count_in_progress = 6;
   float avg_duration_closed = 7;
-  float avg_created_per_day = 8;
+  float avg_created_per_day_last_week = 8;
 }
 
 message CompareProjectsRequest {
