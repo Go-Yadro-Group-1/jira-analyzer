@@ -17,6 +17,17 @@ const (
 
 var ErrUnknownChartType = errors.New("unknown chart type")
 
+type ProjectStats struct {
+	CountTotal               int
+	CountOpen                int
+	CountClosed              int
+	CountReopened            int
+	CountResolved            int
+	CountInProgress          int
+	AvgCompletionTimeHours   float64
+	AvgCreatedPerDayLastWeek float64
+}
+
 type HistogramBar struct {
 	Label string `json:"label"`
 	Count int    `json:"count"`

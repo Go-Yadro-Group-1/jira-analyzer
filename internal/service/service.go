@@ -73,8 +73,18 @@ const dataTypeStats = "stats"
 func (s *Service) GetProjectStat(
 	ctx context.Context,
 	projectID int,
-) (repository.ProjectStats, error) {
-	return fetchWithCache(ctx, s, projectID, dataTypeStats, s.repository.GetStatsByProject)
+) (ProjectStats, error) {
+	return fetchWithCache(
+		ctx, s, projectID, dataTypeStats,
+		func(ctx context.Context, projectID int) (ProjectStats, error) {
+			raw, err := s.repository.GetStatsByProject(ctx, projectID)
+			if err != nil {
+				return ProjectStats{}, fmt.Errorf("get stats by project: %w", err)
+			}
+
+			return toProjectStats(raw), nil
+		},
+	)
 }
 
 const dataTypeIssuesDuration = "issues_duration"
@@ -193,8 +203,8 @@ func (s *Service) GetChart(
 func (s *Service) CompareTwoProjects(
 	ctx context.Context,
 	lhsProjectID, rhsProjectID int,
-) ([2]repository.ProjectStats, error) {
-	var result [2]repository.ProjectStats
+) ([2]ProjectStats, error) {
+	var result [2]ProjectStats
 
 	group, ctx := errgroup.WithContext(ctx)
 
@@ -216,7 +226,7 @@ func (s *Service) CompareTwoProjects(
 
 	err := group.Wait()
 	if err != nil {
-		return [2]repository.ProjectStats{}, fmt.Errorf("compare projects: %w", err)
+		return [2]ProjectStats{}, fmt.Errorf("compare projects: %w", err)
 	}
 
 	return result, nil
@@ -253,6 +263,30 @@ func (s *Service) CompareProjectsCharts(
 	}
 
 	return result, nil
+}
+
+const (
+	secondsPerHour = 3600.0
+	daysInWeek     = 7.0
+)
+
+func toProjectStats(raw repository.ProjectStats) ProjectStats {
+	var avgCompletionTimeHours float64
+	if raw.CountClosed > 0 {
+		avgCompletionTimeHours = float64(raw.TotalDurationClosed) /
+			(float64(raw.CountClosed) * secondsPerHour)
+	}
+
+	return ProjectStats{
+		CountTotal:               raw.CountTotal,
+		CountOpen:                raw.CountOpen,
+		CountClosed:              raw.CountClosed,
+		CountReopened:            raw.CountReopened,
+		CountResolved:            raw.CountResolved,
+		CountInProgress:          raw.CountInProgress,
+		AvgCompletionTimeHours:   avgCompletionTimeHours,
+		AvgCreatedPerDayLastWeek: float64(raw.CountCreatedLastWeek) / daysInWeek,
+	}
 }
 
 func (s *Service) isCacheStale(ctx context.Context, projectID int) (bool, error) {

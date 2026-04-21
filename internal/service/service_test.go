@@ -209,21 +209,50 @@ func TestGetProjectStat(t *testing.T) {
 	repo := mocks.NewMockRepository(ctrl)
 	cache := mocks.NewMockCache(ctrl)
 
-	expected := repository.ProjectStats{
-		CountTotal:  10,
-		CountOpen:   3,
-		CountClosed: 7,
+	raw := repository.ProjectStats{
+		CountTotal:           10,
+		CountOpen:            3,
+		CountClosed:          7,
+		TotalDurationClosed:  25200, // 7 задач × 3600с = 1 час на задачу
+		CountCreatedLastWeek: 14,
 	}
 
 	setupCacheMiss(repo, cache)
-	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(expected, nil)
+	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(raw, nil)
 
-	svc := service.New(repo, cache)
-
-	got, err := svc.GetProjectStat(context.Background(), 1)
+	got, err := service.New(repo, cache).GetProjectStat(context.Background(), 1)
 
 	require.NoError(t, err)
-	assert.Equal(t, expected, got)
+	assert.Equal(t, 10, got.CountTotal)
+	assert.Equal(t, 3, got.CountOpen)
+	assert.Equal(t, 7, got.CountClosed)
+	assert.InDelta(t, 1.0, got.AvgCompletionTimeHours, 0.001)
+	assert.InDelta(t, 2.0, got.AvgCreatedPerDayLastWeek, 0.001)
+}
+
+func TestGetProjectStat_ZeroClosedIssues(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	raw := repository.ProjectStats{
+		CountTotal:           5,
+		CountOpen:            5,
+		CountClosed:          0,
+		TotalDurationClosed:  0,
+		CountCreatedLastWeek: 0,
+	}
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(raw, nil)
+
+	got, err := service.New(repo, cache).GetProjectStat(context.Background(), 1)
+
+	require.NoError(t, err)
+	assert.InDelta(t, 0.0, got.AvgCompletionTimeHours, 0.001)
+	assert.InDelta(t, 0.0, got.AvgCreatedPerDayLastWeek, 0.001)
 }
 
 func TestCompareTwoProjects(t *testing.T) {
