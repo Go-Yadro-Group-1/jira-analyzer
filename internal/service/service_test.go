@@ -208,8 +208,8 @@ func TestGetChart_RepoError_AllChartTypes(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		chartType   service.ChartType
-		setupRepo   func(*mocks.MockRepository)
+		chartType service.ChartType
+		setupRepo func(*mocks.MockRepository)
 	}{
 		{
 			chartType: service.ChartTypeStateDistribution,
@@ -237,8 +237,8 @@ func TestGetChart_RepoError_AllChartTypes(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(string(tt.chartType), func(t *testing.T) {
+	for _, test := range tests {
+		t.Run(string(test.chartType), func(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
@@ -247,9 +247,9 @@ func TestGetChart_RepoError_AllChartTypes(t *testing.T) {
 
 			repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(now, nil)
 			cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(time.Time{}, errCache)
-			tt.setupRepo(repo)
+			test.setupRepo(repo)
 
-			_, err := service.New(repo, cache).GetChart(context.Background(), 1, tt.chartType)
+			_, err := service.New(repo, cache).GetChart(context.Background(), 1, test.chartType)
 
 			require.Error(t, err)
 		})
