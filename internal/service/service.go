@@ -265,30 +265,6 @@ func (s *Service) CompareProjectsCharts(
 	return result, nil
 }
 
-const (
-	secondsPerHour = 3600.0
-	daysInWeek     = 7.0
-)
-
-func toProjectStats(raw repository.ProjectStats) ProjectStats {
-	var avgCompletionTimeHours float64
-	if raw.CountClosed > 0 {
-		avgCompletionTimeHours = float64(raw.TotalDurationClosed) /
-			(float64(raw.CountClosed) * secondsPerHour)
-	}
-
-	return ProjectStats{
-		CountTotal:               raw.CountTotal,
-		CountOpen:                raw.CountOpen,
-		CountClosed:              raw.CountClosed,
-		CountReopened:            raw.CountReopened,
-		CountResolved:            raw.CountResolved,
-		CountInProgress:          raw.CountInProgress,
-		AvgCompletionTimeHours:   avgCompletionTimeHours,
-		AvgCreatedPerDayLastWeek: float64(raw.CountCreatedLastWeek) / daysInWeek,
-	}
-}
-
 func (s *Service) isCacheStale(ctx context.Context, projectID int) (bool, error) {
 	s.lastCheckedMu.RLock()
 

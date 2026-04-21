@@ -238,11 +238,9 @@ func TestGetProjectStat_ZeroClosedIssues(t *testing.T) {
 	cache := mocks.NewMockCache(ctrl)
 
 	raw := repository.ProjectStats{
-		CountTotal:           5,
-		CountOpen:            5,
-		CountClosed:          0,
-		TotalDurationClosed:  0,
-		CountCreatedLastWeek: 0,
+		CountTotal:  5,
+		CountOpen:   5,
+		CountClosed: 0,
 	}
 
 	setupCacheMiss(repo, cache)

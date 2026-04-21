@@ -8,7 +8,7 @@ import (
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 )
 
-var ErrNoClosedIssues = errors.New("no closed issues to build histogram")
+var ErrNoHistogramData = errors.New("no closed issues to build histogram")
 
 const (
 	secondsInHour  = 3600
@@ -88,7 +88,7 @@ func barIndexToSeconds(idx int) int64 {
 
 func buildMultiScaleHistogram(durations []int64) ([]HistogramBar, error) {
 	if len(durations) == 0 {
-		return nil, ErrNoClosedIssues
+		return nil, ErrNoHistogramData
 	}
 
 	var counts [totalBars]int
@@ -151,7 +151,7 @@ func buildIssuesTimeSpentHistogram(
 
 func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogram, error) {
 	if len(rows) == 0 {
-		return nil, ErrNoClosedIssues
+		return nil, ErrNoHistogramData
 	}
 
 	byIssue := make(map[int][]repository.StatusTransition)
