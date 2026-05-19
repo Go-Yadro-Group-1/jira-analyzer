@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -11,7 +12,10 @@ import (
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/app"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
-	_ "github.com/lib/pq" // postgres driver
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres" // migrate postgres driver
+	_ "github.com/golang-migrate/migrate/v4/source/file"       // migrate file source
+	_ "github.com/lib/pq"                                      // postgres driver
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -20,7 +24,8 @@ const (
 	defaultHost = "0.0.0.0"
 	defaultPort = 50051
 
-	defaultConfig = "config/dev.yaml"
+	defaultConfig     = "config/dev.yaml"
+	defaultMigrations = "migrations"
 )
 
 //nolint:exhaustruct
@@ -36,6 +41,7 @@ func NewCommand() *cobra.Command {
 	cmd.Flags().String("host", defaultHost, "gRPC server host")
 	cmd.Flags().Int("port", defaultPort, "gRPC server port")
 	cmd.Flags().String("config", defaultConfig, "path to config file")
+	cmd.Flags().String("migrations", defaultMigrations, "path to migrations directory")
 
 	return cmd
 }
@@ -53,6 +59,16 @@ func run(cmd *cobra.Command, _ []string) error {
 
 	slog.SetDefault(log)
 
+	migrationsDir, err := cmd.Flags().GetString("migrations")
+	if err != nil {
+		return fmt.Errorf("get migrations flag: %w", err)
+	}
+
+	err = runMigrations(&cfg.DB, migrationsDir, log)
+	if err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
 	conn, err := connectDB(cmd.Context(), cfg)
 	if err != nil {
 		return fmt.Errorf("connect db: %w", err)
@@ -63,6 +79,23 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
+
+	return nil
+}
+
+func runMigrations(db *config.DBConfig, dir string, log *slog.Logger) error {
+	migr, err := migrate.New("file://"+dir, db.URL())
+	if err != nil {
+		return fmt.Errorf("init migrate: %w", err)
+	}
+	defer migr.Close()
+
+	err = migr.Up()
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("migrate up: %w", err)
+	}
+
+	log.Info("migrations applied", slog.String("dir", dir))
 
 	return nil
 }
