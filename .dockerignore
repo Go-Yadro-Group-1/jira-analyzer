@@ -1,0 +1,13 @@
+.git
+.github
+.zed
+.golangci.yaml
+docs
+tests
+analyzer.elf
+coverage*.out
+*_test.go
+Dockerfile
+docker-compose.yml
+.dockerignore
+CLAUDE.md
