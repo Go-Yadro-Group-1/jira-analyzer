@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"golang.org/x/sync/singleflight"
 )
@@ -54,15 +55,17 @@ const staleCheckTTL = 30 * time.Second
 type Service struct {
 	repository    Repository
 	cache         Cache
+	metrics       *metrics.Metrics
 	sfGroup       singleflight.Group
 	lastCheckedMu sync.RWMutex
 	lastCheckedAt map[int]time.Time
 }
 
-func New(repository Repository, cache Cache) *Service {
+func New(repository Repository, cache Cache, metrics *metrics.Metrics) *Service {
 	return &Service{
 		repository:    repository,
 		cache:         cache,
+		metrics:       metrics,
 		sfGroup:       singleflight.Group{},
 		lastCheckedMu: sync.RWMutex{},
 		lastCheckedAt: make(map[int]time.Time),
@@ -257,6 +260,7 @@ func fetchWithCache[T any]( //nolint:ireturn
 			var result T
 			if json.Unmarshal(cached, &result) == nil {
 				log.DebugContext(ctx, "cache hit")
+				svc.metrics.CacheHits.WithLabelValues(dataType).Inc()
 
 				return result, nil
 			}
@@ -266,6 +270,8 @@ func fetchWithCache[T any]( //nolint:ireturn
 	} else {
 		log.DebugContext(ctx, "cache stale, refetching from repository")
 	}
+
+	svc.metrics.CacheMisses.WithLabelValues(dataType).Inc()
 
 	key := fmt.Sprintf("%d:%s", projectID, dataType)
 

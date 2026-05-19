@@ -20,14 +20,14 @@ const (
 var ErrUnknownChartType = errors.New("unknown chart type")
 
 type ProjectStats struct {
-	CountTotal               int
-	CountOpen                int
-	CountClosed              int
-	CountReopened            int
-	CountResolved            int
-	CountInProgress          int
-	AvgCompletionTimeHours   float64
-	AvgCreatedPerDayLastWeek float64
+	CountTotal               int     `json:"countTotal"`
+	CountOpen                int     `json:"countOpen"`
+	CountClosed              int     `json:"countClosed"`
+	CountReopened            int     `json:"countReopened"`
+	CountResolved            int     `json:"countResolved"`
+	CountInProgress          int     `json:"countInProgress"`
+	AvgCompletionTimeHours   float64 `json:"avgCompletionTimeHours"`
+	AvgCreatedPerDayLastWeek float64 `json:"avgCreatedPerDayLastWeek"`
 }
 
 type HistogramBar struct {

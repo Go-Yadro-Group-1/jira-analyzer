@@ -7,15 +7,19 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/app"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres" // migrate postgres driver
-	_ "github.com/golang-migrate/migrate/v4/source/file"       // migrate file source
-	_ "github.com/lib/pq"                                      // postgres driver
+	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file" // migrate file source
+	_ "github.com/lib/pq"                                // postgres driver
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -59,6 +63,9 @@ func run(cmd *cobra.Command, _ []string) error {
 
 	slog.SetDefault(log)
 
+	mtr := metrics.New()
+	mtr.RegisterRuntimeCollectors()
+
 	migrationsDir, err := cmd.Flags().GetString("migrations")
 	if err != nil {
 		return fmt.Errorf("get migrations flag: %w", err)
@@ -75,7 +82,10 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	defer conn.Close()
 
-	err = startServer(cmd, conn, log)
+	metricsSrv := startMetricsServer(cfg.Metrics.Port, mtr, log)
+	defer shutdownMetricsServer(metricsSrv, log)
+
+	err = startServer(cmd, conn, log, mtr)
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
@@ -83,8 +93,58 @@ func run(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runMigrations(db *config.DBConfig, dir string, log *slog.Logger) error {
-	migr, err := migrate.New("file://"+dir, db.URL())
+const (
+	metricsShutdownTimeout = 5 * time.Second
+	metricsReadTimeout     = 5 * time.Second
+)
+
+func startMetricsServer(port int, mtr *metrics.Metrics, log *slog.Logger) *http.Server {
+	handlerOpts := promhttp.HandlerOpts{Registry: mtr.Registry} //nolint:exhaustruct
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(mtr.Registry, handlerOpts))
+
+	srv := &http.Server{ //nolint:exhaustruct
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           mux,
+		ReadHeaderTimeout: metricsReadTimeout,
+	}
+
+	go func() {
+		log.Info("starting metrics server", slog.String("addr", srv.Addr))
+
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("metrics server failed", slog.String("error", err.Error()))
+		}
+	}()
+
+	return srv
+}
+
+func shutdownMetricsServer(srv *http.Server, log *slog.Logger) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), metricsShutdownTimeout)
+	defer cancel()
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Warn("metrics server shutdown", slog.String("error", err.Error()))
+	}
+}
+
+func runMigrations(cfg *config.DBConfig, dir string, log *slog.Logger) error {
+	conn, err := sql.Open("postgres", cfg.DSN())
+	if err != nil {
+		return fmt.Errorf("open migrate db: %w", err)
+	}
+	defer conn.Close()
+
+	driver, err := migratepg.WithInstance(conn, &migratepg.Config{}) //nolint:exhaustruct
+	if err != nil {
+		return fmt.Errorf("init migrate driver: %w", err)
+	}
+
+	migr, err := migrate.NewWithDatabaseInstance("file://"+dir, "postgres", driver)
 	if err != nil {
 		return fmt.Errorf("init migrate: %w", err)
 	}
@@ -139,7 +199,7 @@ func connectDB(ctx context.Context, cfg *config.Config) (*sql.DB, error) {
 	return conn, nil
 }
 
-func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger) error {
+func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger, mtr *metrics.Metrics) error {
 	host, err := cmd.Flags().GetString("host")
 	if err != nil {
 		return fmt.Errorf("get host flag: %w", err)
@@ -159,7 +219,7 @@ func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger) error {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 
-	server := app.NewGRPCServer(conn, log)
+	server := app.NewGRPCServer(conn, log, mtr)
 
 	go func() {
 		<-cmd.Context().Done()

@@ -7,9 +7,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service/mocks"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -40,7 +42,7 @@ func TestGetChart_UnknownChartType(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
-	svc := service.New(mocks.NewMockRepository(ctrl), mocks.NewMockCache(ctrl))
+	svc := service.New(mocks.NewMockRepository(ctrl), mocks.NewMockCache(ctrl), metrics.New())
 
 	_, err := svc.GetChart(context.Background(), 1, "nonexistent")
 
@@ -94,7 +96,7 @@ func TestGetChart_AllTypes(t *testing.T) {
 				Return([]repository.PriorityStats{{Priority: "High", Count: 5}}, nil).
 				AnyTimes()
 
-			svc := service.New(repo, cache)
+			svc := service.New(repo, cache, metrics.New())
 
 			data, err := svc.GetChart(context.Background(), 1, chartType)
 
@@ -136,7 +138,7 @@ func TestGetChart_CacheHit(t *testing.T) {
 		cache.EXPECT().Get(gomock.Any(), 1, gomock.Any()).Return(cachedData, nil),
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	_, err = svc.GetChart(ctx, 1, service.ChartTypeOpenStateHistogram)
 	require.NoError(t, err)
@@ -172,7 +174,7 @@ func TestGetChart_StaleCache(t *testing.T) {
 
 	_ = staleData
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	data, err := svc.GetChart(context.Background(), 1, service.ChartTypeOpenStateHistogram)
 
@@ -195,7 +197,7 @@ func TestGetChart_RepoError(t *testing.T) {
 	cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(time.Time{}, errCache)
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).Return(nil, errDB)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	_, err := svc.GetChart(context.Background(), 1, service.ChartTypeOpenStateHistogram)
 
@@ -249,11 +251,58 @@ func TestGetChart_RepoError_AllChartTypes(t *testing.T) {
 			cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(time.Time{}, errCache)
 			test.setupRepo(repo)
 
-			_, err := service.New(repo, cache).GetChart(context.Background(), 1, test.chartType)
+			svc := service.New(repo, cache, metrics.New())
+
+			_, err := svc.GetChart(context.Background(), 1, test.chartType)
 
 			require.Error(t, err)
 		})
 	}
+}
+
+func TestFetchWithCache_IncrementsCacheMissCounter(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+
+	setupCacheMiss(repo, cache)
+	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(repository.ProjectStats{}, nil)
+
+	mtr := metrics.New()
+	svc := service.New(repo, cache, mtr)
+
+	_, err := svc.GetProjectStat(context.Background(), 1)
+	require.NoError(t, err)
+
+	assert.InDelta(t, 1.0, testutil.ToFloat64(mtr.CacheMisses.WithLabelValues("stats")), 0.001)
+	assert.InDelta(t, 0.0, testutil.ToFloat64(mtr.CacheHits.WithLabelValues("stats")), 0.001)
+}
+
+func TestFetchWithCache_IncrementsCacheHitCounter(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	repo := mocks.NewMockRepository(ctrl)
+	cache := mocks.NewMockCache(ctrl)
+	dbTime := time.Now()
+
+	cachedStats, err := json.Marshal(service.ProjectStats{CountTotal: 42}) //nolint:exhaustruct
+	require.NoError(t, err)
+
+	repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(dbTime, nil)
+	cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(dbTime, nil)
+	cache.EXPECT().Get(gomock.Any(), 1, "stats").Return(cachedStats, nil)
+
+	mtr := metrics.New()
+	svc := service.New(repo, cache, mtr)
+
+	_, err = svc.GetProjectStat(context.Background(), 1)
+	require.NoError(t, err)
+
+	assert.InDelta(t, 1.0, testutil.ToFloat64(mtr.CacheHits.WithLabelValues("stats")), 0.001)
+	assert.InDelta(t, 0.0, testutil.ToFloat64(mtr.CacheMisses.WithLabelValues("stats")), 0.001)
 }
 
 func TestGetProjectStat(t *testing.T) {
@@ -274,7 +323,7 @@ func TestGetProjectStat(t *testing.T) {
 	setupCacheMiss(repo, cache)
 	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(raw, nil)
 
-	got, err := service.New(repo, cache).GetProjectStat(context.Background(), 1)
+	got, err := service.New(repo, cache, metrics.New()).GetProjectStat(context.Background(), 1)
 
 	require.NoError(t, err)
 	assert.Equal(t, 10, got.CountTotal)
@@ -300,7 +349,7 @@ func TestGetProjectStat_ZeroClosedIssues(t *testing.T) {
 	setupCacheMiss(repo, cache)
 	repo.EXPECT().GetStatsByProject(gomock.Any(), 1).Return(raw, nil)
 
-	got, err := service.New(repo, cache).GetProjectStat(context.Background(), 1)
+	got, err := service.New(repo, cache, metrics.New()).GetProjectStat(context.Background(), 1)
 
 	require.NoError(t, err)
 	assert.InDelta(t, 0.0, got.AvgCompletionTimeHours, 0.001)

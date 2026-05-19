@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/service/mocks"
@@ -30,7 +31,7 @@ func TestGetIssuesDurationHistogram_Empty(t *testing.T) {
 	setupCacheMiss(repo, cache)
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).Return(nil, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	_, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -48,7 +49,7 @@ func TestGetIssuesDurationHistogram_HourZone(t *testing.T) {
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 2 * hour}}, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -70,7 +71,7 @@ func TestGetIssuesDurationHistogram_DayZone(t *testing.T) {
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 3 * day}}, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -91,7 +92,7 @@ func TestGetIssuesDurationHistogram_MonthZone(t *testing.T) {
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 2 * month}}, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -112,7 +113,7 @@ func TestGetIssuesDurationHistogram_YearZone(t *testing.T) {
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 3 * year}}, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -133,7 +134,7 @@ func TestGetIssuesDurationHistogram_MaxYear(t *testing.T) {
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 10 * year}}, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -158,7 +159,7 @@ func TestGetIssuesDurationHistogram_MultipleZones(t *testing.T) {
 		}, nil,
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	hist, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
@@ -177,7 +178,7 @@ func TestGetStatusHistograms_Empty(t *testing.T) {
 	setupCacheMiss(repo, cache)
 	repo.EXPECT().GetStatusTransitionsByProject(gomock.Any(), 1).Return(nil, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	_, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -206,7 +207,7 @@ func TestGetStatusHistograms_SingleIssue(t *testing.T) {
 		}, nil,
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	histograms, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -234,7 +235,7 @@ func TestGetStatusHistograms_GroupsByIssue(t *testing.T) {
 		}, nil,
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	histograms, err := svc.GetStatusHistograms(context.Background(), 1)
 
@@ -263,7 +264,7 @@ func TestGetDailyActivityChart_Empty(t *testing.T) {
 	setupCacheMiss(repo, cache)
 	repo.EXPECT().GetDailyActivityByProject(gomock.Any(), 1).Return(nil, nil)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	chart, err := svc.GetDailyActivityChart(context.Background(), 1)
 
@@ -289,7 +290,7 @@ func TestGetDailyActivityChart_SortedWithCumulative(t *testing.T) {
 		}, nil,
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	chart, err := svc.GetDailyActivityChart(context.Background(), 1)
 
@@ -316,7 +317,7 @@ func TestGetPriorityChart(t *testing.T) {
 		}, nil,
 	)
 
-	svc := service.New(repo, cache)
+	svc := service.New(repo, cache, metrics.New())
 
 	chart, err := svc.GetPriorityChart(context.Background(), 1)
 

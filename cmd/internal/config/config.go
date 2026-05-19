@@ -2,16 +2,15 @@ package config
 
 import (
 	"fmt"
-	"net"
-	"strconv"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	DB  DBConfig  `mapstructure:"db"  validate:"required"`
-	App AppConfig `mapstructure:"app" validate:"required"`
+	DB      DBConfig      `mapstructure:"db"      validate:"required"`
+	App     AppConfig     `mapstructure:"app"     validate:"required"`
+	Metrics MetricsConfig `mapstructure:"metrics" validate:"required"`
 }
 
 type DBConfig struct {
@@ -25,6 +24,10 @@ type DBConfig struct {
 
 type AppConfig struct {
 	LogLevel string `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
+}
+
+type MetricsConfig struct {
+	Port int `mapstructure:"port" validate:"required,min=1,max=65535"`
 }
 
 //nolint:gochecknoglobals
@@ -50,14 +53,5 @@ func (d *DBConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
-	)
-}
-
-func (d *DBConfig) URL() string {
-	hostPort := net.JoinHostPort(d.Host, strconv.Itoa(d.Port))
-
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=%s",
-		d.User, d.Password, hostPort, d.DBName, d.SSLMode,
 	)
 }
