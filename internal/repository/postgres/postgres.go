@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 //go:embed queries
@@ -56,12 +58,14 @@ func newProjectErr(action string, projectID int, err error) error {
 }
 
 type Postgres struct {
-	db *sql.DB
+	db      *sql.DB
+	metrics *metrics.Metrics
 }
 
-func New(db *sql.DB) *Postgres {
+func New(db *sql.DB, metrics *metrics.Metrics) *Postgres {
 	return &Postgres{
-		db: db,
+		db:      db,
+		metrics: metrics,
 	}
 }
 
@@ -69,6 +73,8 @@ func (p *Postgres) GetProjectLastUpdated(
 	ctx context.Context,
 	projectID int,
 ) (time.Time, error) {
+	defer p.observe("get_project_last_updated").ObserveDuration()
+
 	var timeT time.Time
 
 	err := p.db.QueryRowContext(ctx, getProjectLastUpdatedQuery, projectID).Scan(&timeT)
@@ -83,6 +89,8 @@ func (p *Postgres) GetStatsByProject(
 	ctx context.Context,
 	projectID int,
 ) (repository.ProjectStats, error) {
+	defer p.observe("get_stats_by_project").ObserveDuration()
+
 	var stats repository.ProjectStats
 
 	stats.ProjectID = projectID
@@ -108,6 +116,8 @@ func (p *Postgres) GetIssuesDurationByProject(
 	ctx context.Context,
 	projectID int,
 ) ([]repository.IssueDuration, error) {
+	defer p.observe("get_issues_duration_by_project").ObserveDuration()
+
 	rows, err := p.db.QueryContext(ctx, getIssuesDurationByProjectQuery, projectID)
 	if err != nil {
 		return nil, newProjectErr("query issues duration", projectID, err)
@@ -139,6 +149,8 @@ func (p *Postgres) GetStatusTransitionsByProject(
 	ctx context.Context,
 	projectID int,
 ) ([]repository.StatusTransition, error) {
+	defer p.observe("get_status_transitions_by_project").ObserveDuration()
+
 	rows, err := p.db.QueryContext(ctx, getStatusTransitionsByProjectQuery, projectID)
 	if err != nil {
 		return nil, newProjectErr("query status transitions", projectID, err)
@@ -170,6 +182,8 @@ func (p *Postgres) GetDailyActivityByProject(
 	ctx context.Context,
 	projectID int,
 ) ([]repository.DailyActivity, error) {
+	defer p.observe("get_daily_activity_by_project").ObserveDuration()
+
 	rows, err := p.db.QueryContext(ctx, getDailyActivityByProjectQuery, projectID)
 	if err != nil {
 		return nil, newProjectErr("query daily activity", projectID, err)
@@ -201,6 +215,8 @@ func (p *Postgres) GetIssuesTimeSpentByProject(
 	ctx context.Context,
 	projectID int,
 ) ([]repository.IssueTimeSpent, error) {
+	defer p.observe("get_issues_time_spent_by_project").ObserveDuration()
+
 	rows, err := p.db.QueryContext(ctx, getIssuesTimeSpentByProjectQuery, projectID)
 	if err != nil {
 		return nil, newProjectErr("query time spent", projectID, err)
@@ -232,6 +248,8 @@ func (p *Postgres) GetPriorityStatsByProject(
 	ctx context.Context,
 	projectID int,
 ) ([]repository.PriorityStats, error) {
+	defer p.observe("get_priority_stats_by_project").ObserveDuration()
+
 	rows, err := p.db.QueryContext(ctx, getPriorityStatsByProjectQuery, projectID)
 	if err != nil {
 		return nil, newProjectErr("query priority stats", projectID, err)
@@ -257,4 +275,8 @@ func (p *Postgres) GetPriorityStatsByProject(
 	}
 
 	return result, nil
+}
+
+func (p *Postgres) observe(query string) *prometheus.Timer {
+	return prometheus.NewTimer(p.metrics.DBQueryDuration.WithLabelValues(query))
 }

@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository/postgres"
 	_ "github.com/lib/pq"
@@ -134,7 +135,7 @@ func findMigrationsDir(startPath string) string {
 func TestGetStatsByProjectBase(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -159,7 +160,7 @@ func TestGetStatsByProjectBase(t *testing.T) {
 func TestGetStatsByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -175,7 +176,7 @@ func TestGetStatsByProjectEmpty(t *testing.T) {
 func TestGetIssuesDurationByProject(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -198,7 +199,7 @@ func TestGetIssuesDurationByProject(t *testing.T) {
 func TestGetIssuesDurationByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -212,7 +213,7 @@ func TestGetIssuesDurationByProjectEmpty(t *testing.T) {
 func TestGetStatusTransitionsByProject(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -254,7 +255,7 @@ func TestGetStatusTransitionsByProject(t *testing.T) {
 func TestGetStatusTransitionsByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -267,7 +268,7 @@ func TestGetStatusTransitionsByProjectEmpty(t *testing.T) {
 func TestGetDailyActivityByProject(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -309,7 +310,7 @@ func TestGetDailyActivityByProject(t *testing.T) {
 func TestGetDailyActivityByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -322,7 +323,7 @@ func TestGetDailyActivityByProjectEmpty(t *testing.T) {
 func TestGetIssuesTimeSpentByProject(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -343,7 +344,7 @@ func TestGetIssuesTimeSpentByProject(t *testing.T) {
 func TestGetIssuesTimeSpentByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -356,7 +357,7 @@ func TestGetIssuesTimeSpentByProjectEmpty(t *testing.T) {
 func TestGetPriorityStatsByProject(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -384,7 +385,7 @@ func TestGetPriorityStatsByProject(t *testing.T) {
 func TestGetPriorityStatsByProjectEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -415,7 +416,7 @@ func mkDailyActivity(date time.Time, creation, completion int) repository.DailyA
 func TestGetProjectLastUpdated(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
@@ -431,7 +432,7 @@ func TestGetProjectLastUpdated(t *testing.T) {
 func TestGetProjectLastUpdatedEmpty(t *testing.T) {
 	t.Parallel()
 
-	repo := postgres.New(database)
+	repo := postgres.New(database, metrics.New())
 
 	ctx, cancel := context.WithTimeout(t.Context(), dbTimeout)
 	defer cancel()
