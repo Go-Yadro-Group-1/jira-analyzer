@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 	"golang.org/x/sync/singleflight"
 )
@@ -237,6 +239,11 @@ func fetchWithCache[T any]( //nolint:ireturn
 	dataType string,
 	fetch func(context.Context, int) (T, error),
 ) (T, error) {
+	log := logger.FromContext(ctx).With(
+		slog.Int("project_id", projectID),
+		slog.String("data_type", dataType),
+	)
+
 	var zero T
 
 	stale, err := svc.isCacheStale(ctx, projectID)
@@ -249,9 +256,15 @@ func fetchWithCache[T any]( //nolint:ireturn
 		if cacheErr == nil {
 			var result T
 			if json.Unmarshal(cached, &result) == nil {
+				log.DebugContext(ctx, "cache hit")
+
 				return result, nil
 			}
 		}
+
+		log.DebugContext(ctx, "cache miss, fetching from repository")
+	} else {
+		log.DebugContext(ctx, "cache stale, refetching from repository")
 	}
 
 	key := fmt.Sprintf("%d:%s", projectID, dataType)

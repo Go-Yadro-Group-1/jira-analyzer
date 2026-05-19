@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"log/slog"
 
 	analyzerv1 "github.com/Go-Yadro-Group-1/Jira-Analyzer/gen/grpc/analyzer/v1"
 	grpchandler "github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/handler/grpc"
@@ -11,13 +12,15 @@ import (
 	"google.golang.org/grpc"
 )
 
-func NewGRPCServer(db *sql.DB) *grpc.Server {
+func NewGRPCServer(db *sql.DB, log *slog.Logger) *grpc.Server {
 	repo := postgres.New(db)
 	cache := memory.NewCacheRepository[int, string]()
 	svc := service.New(repo, cache)
 	handler := grpchandler.New(svc)
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(
+		grpc.UnaryInterceptor(grpchandler.UnaryServerLogging(log)),
+	)
 	analyzerv1.RegisterAnalyzerServiceServer(server, handler)
 
 	return server
