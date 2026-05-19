@@ -8,3 +8,6 @@ db:
 
 app:
   log_level: "debug"
+
+metrics:
+  port: 9090

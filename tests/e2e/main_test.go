@@ -17,6 +17,7 @@ import (
 
 	analyzerv1 "github.com/Go-Yadro-Group-1/Jira-Analyzer/gen/grpc/analyzer/v1"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/app"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -64,7 +65,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	server := app.NewGRPCServer(database, slog.New(slog.DiscardHandler))
+	server := app.NewGRPCServer(database, slog.New(slog.DiscardHandler), metrics.New())
 
 	var lc net.ListenConfig
 
