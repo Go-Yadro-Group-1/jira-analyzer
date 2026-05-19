@@ -25,16 +25,8 @@ type AppConfig struct {
 	LogLevel string `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
 }
 
-// nolint: gochecknoglobals
-var (
-	appConfig *Config
-	validate  *validator.Validate
-)
-
-// nolint: gochecknoinits
-func init() {
-	validate = validator.New()
-}
+//nolint:gochecknoglobals
+var validate = validator.New()
 
 func LoadConfig() (*Config, error) {
 	var cfg Config
@@ -49,26 +41,7 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	err = cfg.customValidate()
-	if err != nil {
-		return nil, fmt.Errorf("validation failed: %w", err)
-	}
-
-	appConfig = &cfg
-
 	return &cfg, nil
-}
-
-func GetConfig() *Config {
-	if appConfig == nil {
-		panic("config not loaded")
-	}
-
-	return appConfig
-}
-
-func (c *Config) customValidate() error {
-	return nil
 }
 
 func (d *DBConfig) DSN() string {
