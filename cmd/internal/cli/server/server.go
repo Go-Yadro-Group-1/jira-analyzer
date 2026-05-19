@@ -16,9 +16,9 @@ import (
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	"github.com/golang-migrate/migrate/v4"
-	_ "github.com/golang-migrate/migrate/v4/database/postgres" // migrate postgres driver
-	_ "github.com/golang-migrate/migrate/v4/source/file"       // migrate file source
-	_ "github.com/lib/pq"                                      // postgres driver
+	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file" // migrate file source
+	_ "github.com/lib/pq"                                // postgres driver
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -132,8 +132,19 @@ func shutdownMetricsServer(srv *http.Server, log *slog.Logger) {
 	}
 }
 
-func runMigrations(db *config.DBConfig, dir string, log *slog.Logger) error {
-	migr, err := migrate.New("file://"+dir, db.URL())
+func runMigrations(cfg *config.DBConfig, dir string, log *slog.Logger) error {
+	conn, err := sql.Open("postgres", cfg.DSN())
+	if err != nil {
+		return fmt.Errorf("open migrate db: %w", err)
+	}
+	defer conn.Close()
+
+	driver, err := migratepg.WithInstance(conn, &migratepg.Config{}) //nolint:exhaustruct
+	if err != nil {
+		return fmt.Errorf("init migrate driver: %w", err)
+	}
+
+	migr, err := migrate.NewWithDatabaseInstance("file://"+dir, "postgres", driver)
 	if err != nil {
 		return fmt.Errorf("init migrate: %w", err)
 	}
