@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/app"
 	_ "github.com/lib/pq" // postgres driver
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -48,7 +50,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	defer conn.Close()
 
-	err = startServer(cmd, cfg)
+	err = startServer(cmd, conn)
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
@@ -95,7 +97,7 @@ func connectDB(ctx context.Context, cfg *config.Config) (*sql.DB, error) {
 	return conn, nil
 }
 
-func startServer(cmd *cobra.Command, _ *config.Config) error {
+func startServer(cmd *cobra.Command, conn *sql.DB) error {
 	host, err := cmd.Flags().GetString("host")
 	if err != nil {
 		return fmt.Errorf("get host flag: %w", err)
@@ -106,7 +108,28 @@ func startServer(cmd *cobra.Command, _ *config.Config) error {
 		return fmt.Errorf("get port flag: %w", err)
 	}
 
-	log.Printf("starting gRPC server on %s:%d\n", host, port)
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	var lc net.ListenConfig
+
+	listener, err := lc.Listen(cmd.Context(), "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+
+	server := app.NewGRPCServer(conn)
+
+	go func() {
+		<-cmd.Context().Done()
+		server.GracefulStop()
+	}()
+
+	log.Printf("starting gRPC server on %s\n", addr)
+
+	err = server.Serve(listener)
+	if err != nil {
+		return fmt.Errorf("serve: %w", err)
+	}
 
 	return nil
 }
