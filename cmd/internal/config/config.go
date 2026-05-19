@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/viper"
@@ -53,5 +55,14 @@ func (d *DBConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		d.Host, d.Port, d.User, d.Password, d.DBName, d.SSLMode,
+	)
+}
+
+func (d *DBConfig) URL() string {
+	hostPort := net.JoinHostPort(d.Host, strconv.Itoa(d.Port))
+
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?sslmode=%s",
+		d.User, d.Password, hostPort, d.DBName, d.SSLMode,
 	)
 }
