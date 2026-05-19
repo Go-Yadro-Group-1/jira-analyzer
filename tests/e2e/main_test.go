@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	server := app.NewGRPCServer(database)
+	server := app.NewGRPCServer(database, slog.New(slog.DiscardHandler))
 
 	var lc net.ListenConfig
 
