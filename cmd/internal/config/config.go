@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	DB  DBConfig  `mapstructure:"db"  validate:"required"`
-	App AppConfig `mapstructure:"app" validate:"required"`
+	DB      DBConfig      `mapstructure:"db"      validate:"required"`
+	App     AppConfig     `mapstructure:"app"     validate:"required"`
+	Metrics MetricsConfig `mapstructure:"metrics" validate:"required"`
 }
 
 type DBConfig struct {
@@ -23,6 +24,10 @@ type DBConfig struct {
 
 type AppConfig struct {
 	LogLevel string `mapstructure:"log_level" validate:"required,oneof=debug info warn error"`
+}
+
+type MetricsConfig struct {
+	Port int `mapstructure:"port" validate:"required,min=1,max=65535"`
 }
 
 //nolint:gochecknoglobals

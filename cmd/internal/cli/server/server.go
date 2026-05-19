@@ -3,15 +3,20 @@ package server
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/cmd/internal/config"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/app"
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/logger"
+	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/metrics"
 	_ "github.com/lib/pq" // postgres driver
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -53,18 +58,63 @@ func run(cmd *cobra.Command, _ []string) error {
 
 	slog.SetDefault(log)
 
+	mtr := metrics.New()
+	mtr.RegisterRuntimeCollectors()
+
 	conn, err := connectDB(cmd.Context(), cfg)
 	if err != nil {
 		return fmt.Errorf("connect db: %w", err)
 	}
 	defer conn.Close()
 
-	err = startServer(cmd, conn, log)
+	metricsSrv := startMetricsServer(cfg.Metrics.Port, mtr, log)
+	defer shutdownMetricsServer(metricsSrv, log)
+
+	err = startServer(cmd, conn, log, mtr)
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
 
 	return nil
+}
+
+const (
+	metricsShutdownTimeout = 5 * time.Second
+	metricsReadTimeout     = 5 * time.Second
+)
+
+func startMetricsServer(port int, mtr *metrics.Metrics, log *slog.Logger) *http.Server {
+	handlerOpts := promhttp.HandlerOpts{Registry: mtr.Registry} //nolint:exhaustruct
+
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(mtr.Registry, handlerOpts))
+
+	srv := &http.Server{ //nolint:exhaustruct
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           mux,
+		ReadHeaderTimeout: metricsReadTimeout,
+	}
+
+	go func() {
+		log.Info("starting metrics server", slog.String("addr", srv.Addr))
+
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("metrics server failed", slog.String("error", err.Error()))
+		}
+	}()
+
+	return srv
+}
+
+func shutdownMetricsServer(srv *http.Server, log *slog.Logger) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), metricsShutdownTimeout)
+	defer cancel()
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Warn("metrics server shutdown", slog.String("error", err.Error()))
+	}
 }
 
 func loadConfig(cmd *cobra.Command) (*config.Config, error) {
@@ -106,7 +156,7 @@ func connectDB(ctx context.Context, cfg *config.Config) (*sql.DB, error) {
 	return conn, nil
 }
 
-func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger) error {
+func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger, mtr *metrics.Metrics) error {
 	host, err := cmd.Flags().GetString("host")
 	if err != nil {
 		return fmt.Errorf("get host flag: %w", err)
@@ -126,7 +176,7 @@ func startServer(cmd *cobra.Command, conn *sql.DB, log *slog.Logger) error {
 		return fmt.Errorf("listen %s: %w", addr, err)
 	}
 
-	server := app.NewGRPCServer(conn, log)
+	server := app.NewGRPCServer(conn, log, mtr)
 
 	go func() {
 		<-cmd.Context().Done()
