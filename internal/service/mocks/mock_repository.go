@@ -146,3 +146,32 @@ func (mr *MockRepositoryMockRecorder) GetStatusTransitionsByProject(ctx, project
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatusTransitionsByProject", reflect.TypeOf((*MockRepository)(nil).GetStatusTransitionsByProject), ctx, projectID)
 }
+
+// ListProjects mocks base method.
+func (m *MockRepository) ListProjects(ctx context.Context) ([]repository.Project, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListProjects", ctx)
+	ret0, _ := ret[0].([]repository.Project)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListProjects indicates an expected call of ListProjects.
+func (mr *MockRepositoryMockRecorder) ListProjects(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProjects", reflect.TypeOf((*MockRepository)(nil).ListProjects), ctx)
+}
+
+// DeleteProject mocks base method.
+func (m *MockRepository) DeleteProject(ctx context.Context, projectID int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteProject", ctx, projectID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteProject indicates an expected call of DeleteProject.
+func (mr *MockRepositoryMockRecorder) DeleteProject(ctx, projectID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProject", reflect.TypeOf((*MockRepository)(nil).DeleteProject), ctx, projectID)
+}

@@ -17,7 +17,15 @@ const (
 	ChartTypeDailyActivity       ChartType = "daily_activity"
 )
 
-var ErrUnknownChartType = errors.New("unknown chart type")
+var (
+	ErrUnknownChartType = errors.New("unknown chart type")
+	ErrProjectNotFound  = errors.New("project not found")
+)
+
+type Project struct {
+	ID    int
+	Title string
+}
 
 type ProjectStats struct {
 	CountTotal               int     `json:"countTotal"`
