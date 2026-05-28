@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+type Project struct {
+	ID    int
+	Title string
+}
+
 type ProjectStats struct {
 	ProjectID            int
 	CountTotal           int

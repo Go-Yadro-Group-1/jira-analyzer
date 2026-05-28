@@ -35,12 +35,13 @@ const (
 	dbUser     = "postgres"
 	dbPassword = "postgres"
 
-	migrationsTargetVersion = 3
+	migrationsTargetVersion = 4
 )
 
 //nolint:gochecknoglobals
 var (
 	client                analyzerv1.AnalyzerServiceClient
+	sharedDB              *sql.DB
 	errMigrationsNotFound = errors.New("migrations directory not found")
 )
 
@@ -52,26 +53,26 @@ func TestMain(m *testing.M) {
 		log.Fatalf("start postgres: %v", err)
 	}
 
-	database, err := sql.Open("postgres", dsn)
+	sharedDB, err = sql.Open("postgres", dsn)
 	if err != nil {
 		terminateContainer()
-		log.Fatalf("open db: %v", err)
+		log.Fatalf("open sharedDB: %v", err)
 	}
 
 	err = runMigrations(dsn)
 	if err != nil {
-		database.Close()
+		sharedDB.Close()
 		terminateContainer()
 		log.Fatalf("migrate: %v", err)
 	}
 
-	server := app.NewGRPCServer(database, slog.New(slog.DiscardHandler), metrics.New())
+	server := app.NewGRPCServer(sharedDB, slog.New(slog.DiscardHandler), metrics.New())
 
 	var lc net.ListenConfig
 
 	listener, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
-		database.Close()
+		sharedDB.Close()
 		terminateContainer()
 		log.Fatalf("listen: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestMain(m *testing.M) {
 	)
 	if err != nil {
 		server.GracefulStop()
-		database.Close()
+		sharedDB.Close()
 		terminateContainer()
 		log.Fatalf("grpc dial: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestMain(m *testing.M) {
 	_ = conn.Close()
 
 	server.GracefulStop()
-	database.Close()
+	sharedDB.Close()
 	terminateContainer()
 
 	os.Exit(code)

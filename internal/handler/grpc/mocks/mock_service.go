@@ -70,3 +70,32 @@ func (mr *MockServiceMockRecorder) GetProjectStat(ctx, projectID any) *gomock.Ca
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjectStat", reflect.TypeOf((*MockService)(nil).GetProjectStat), ctx, projectID)
 }
+
+// ListProjects mocks base method.
+func (m *MockService) ListProjects(ctx context.Context) ([]service.Project, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListProjects", ctx)
+	ret0, _ := ret[0].([]service.Project)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListProjects indicates an expected call of ListProjects.
+func (mr *MockServiceMockRecorder) ListProjects(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListProjects", reflect.TypeOf((*MockService)(nil).ListProjects), ctx)
+}
+
+// DeleteProject mocks base method.
+func (m *MockService) DeleteProject(ctx context.Context, projectID int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteProject", ctx, projectID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteProject indicates an expected call of DeleteProject.
+func (mr *MockServiceMockRecorder) DeleteProject(ctx, projectID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProject", reflect.TypeOf((*MockService)(nil).DeleteProject), ctx, projectID)
+}

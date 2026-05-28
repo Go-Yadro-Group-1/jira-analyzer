@@ -16,6 +16,8 @@ import (
 type Service interface {
 	GetChart(ctx context.Context, projectID int, chartType service.ChartType) ([]byte, error)
 	GetProjectStat(ctx context.Context, projectID int) (service.ProjectStats, error)
+	ListProjects(ctx context.Context) ([]service.Project, error)
+	DeleteProject(ctx context.Context, projectID int) error
 }
 
 type Handler struct {
@@ -112,9 +114,45 @@ func statsToProto(stats service.ProjectStats) *analyzerv1.Stats {
 	}
 }
 
+func (h *Handler) ListProjects(
+	ctx context.Context,
+	_ *analyzerv1.ListProjectsRequest,
+) (*analyzerv1.ListProjectsResponse, error) {
+	projects, err := h.svc.ListProjects(ctx)
+	if err != nil {
+		return nil, toGRPCError(err)
+	}
+
+	protoProjects := make([]*analyzerv1.ProjectInfo, len(projects))
+	for i, p := range projects {
+		protoProjects[i] = &analyzerv1.ProjectInfo{
+			ProjectId:  int64(p.ID), //nolint:gosec
+			ProjectKey: p.Title,
+		}
+	}
+
+	return &analyzerv1.ListProjectsResponse{Projects: protoProjects}, nil
+}
+
+func (h *Handler) DeleteProject(
+	ctx context.Context,
+	req *analyzerv1.DeleteProjectRequest,
+) (*analyzerv1.DeleteProjectResponse, error) {
+	err := h.svc.DeleteProject(ctx, int(req.GetProjectId())) //nolint:gosec
+	if err != nil {
+		return nil, toGRPCError(err)
+	}
+
+	return &analyzerv1.DeleteProjectResponse{}, nil
+}
+
 func toGRPCError(err error) error {
 	if errors.Is(err, service.ErrUnknownChartType) {
 		return fmt.Errorf("grpc handler: %w", status.Error(codes.InvalidArgument, err.Error()))
+	}
+
+	if errors.Is(err, service.ErrProjectNotFound) {
+		return fmt.Errorf("grpc handler: %w", status.Error(codes.NotFound, err.Error()))
 	}
 
 	return fmt.Errorf("grpc handler: %w", status.Error(codes.Internal, err.Error()))

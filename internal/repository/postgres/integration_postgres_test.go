@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("connect to db: %v", err)
 	}
 
-	runMigrations(dsn, 3)
+	runMigrations(dsn, 4)
 
 	code := m.Run()
 
