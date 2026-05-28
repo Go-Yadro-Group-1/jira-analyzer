@@ -33,6 +33,8 @@ var (
 	getDailyActivityByProjectQuery     = mustQuery("get_daily_activity_by_project.sql")
 	getIssuesTimeSpentByProjectQuery   = mustQuery("get_issues_time_spent_by_project.sql")
 	getPriorityStatsByProjectQuery     = mustQuery("get_priority_stats_by_project.sql")
+	listProjectsQuery                  = mustQuery("list_projects.sql")
+	deleteProjectQuery                 = mustQuery("delete_project.sql")
 )
 
 type ProjectQueryError struct {
@@ -275,6 +277,56 @@ func (p *Postgres) GetPriorityStatsByProject(
 	}
 
 	return result, nil
+}
+
+func (p *Postgres) ListProjects(ctx context.Context) ([]repository.Project, error) {
+	defer p.observe("list_projects").ObserveDuration()
+
+	rows, err := p.db.QueryContext(ctx, listProjectsQuery)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+	defer rows.Close()
+
+	var result []repository.Project
+
+	for rows.Next() {
+		var project repository.Project
+
+		err := rows.Scan(&project.ID, &project.Title)
+		if err != nil {
+			return nil, fmt.Errorf("scan project: %w", err)
+		}
+
+		result = append(result, project)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("iterate project rows: %w", err)
+	}
+
+	return result, nil
+}
+
+func (p *Postgres) DeleteProject(ctx context.Context, projectID int) error {
+	defer p.observe("delete_project").ObserveDuration()
+
+	result, err := p.db.ExecContext(ctx, deleteProjectQuery, projectID)
+	if err != nil {
+		return newProjectErr("delete", projectID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return newProjectErr("check delete result", projectID, err)
+	}
+
+	if rowsAffected == 0 {
+		return newProjectErr("delete", projectID, sql.ErrNoRows)
+	}
+
+	return nil
 }
 
 func (p *Postgres) observe(query string) *prometheus.Timer {

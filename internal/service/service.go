@@ -5,7 +5,9 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -40,6 +42,8 @@ type Repository interface {
 		ctx context.Context,
 		projectID int,
 	) ([]repository.PriorityStats, error)
+	ListProjects(ctx context.Context) ([]repository.Project, error)
+	DeleteProject(ctx context.Context, projectID int) error
 }
 
 type Cache interface {
@@ -181,6 +185,39 @@ func (s *Service) GetPriorityChart(ctx context.Context, projectID int) (Priority
 			return buildPriorityChart(rows), nil
 		},
 	)
+}
+
+func (s *Service) ListProjects(ctx context.Context) ([]Project, error) {
+	projects, err := s.repository.ListProjects(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list projects: %w", err)
+	}
+
+	result := make([]Project, len(projects))
+	for i, p := range projects {
+		result[i] = Project{ID: p.ID, Title: p.Title}
+	}
+
+	return result, nil
+}
+
+func (s *Service) DeleteProject(ctx context.Context, projectID int) error {
+	err := s.repository.DeleteProject(ctx, projectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrProjectNotFound
+		}
+
+		return fmt.Errorf("delete project: %w", err)
+	}
+
+	_ = s.cache.Invalidate(ctx, projectID)
+
+	s.lastCheckedMu.Lock()
+	delete(s.lastCheckedAt, projectID)
+	s.lastCheckedMu.Unlock()
+
+	return nil
 }
 
 func (s *Service) GetChart(
