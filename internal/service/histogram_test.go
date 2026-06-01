@@ -33,9 +33,10 @@ func TestGetIssuesDurationHistogram_Empty(t *testing.T) {
 
 	svc := service.New(repo, cache, metrics.New())
 
-	_, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
+	result, err := svc.GetIssuesDurationHistogram(context.Background(), 1)
 
-	require.ErrorIs(t, err, service.ErrNoHistogramData)
+	require.NoError(t, err)
+	require.Empty(t, result.Bars)
 }
 
 func TestGetIssuesDurationHistogram_HourZone(t *testing.T) {
@@ -180,9 +181,10 @@ func TestGetStatusHistograms_Empty(t *testing.T) {
 
 	svc := service.New(repo, cache, metrics.New())
 
-	_, err := svc.GetStatusHistograms(context.Background(), 1)
+	result, err := svc.GetStatusHistograms(context.Background(), 1)
 
-	require.ErrorIs(t, err, service.ErrNoHistogramData)
+	require.NoError(t, err)
+	require.Empty(t, result)
 }
 
 func TestGetStatusHistograms_SingleIssue(t *testing.T) {
