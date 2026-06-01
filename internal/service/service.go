@@ -318,21 +318,7 @@ func fetchWithCache[T any]( //nolint:ireturn
 			return nil, fetchErr
 		}
 
-		data, marshalErr := json.Marshal(result)
-		if marshalErr == nil {
-			_ = svc.cache.Set(ctx, projectID, dataType, data)
-			// Store the DB's last-updated marker (MAX(updated_time)), not the
-			// wall clock. isCacheStale compares this against the current DB
-			// marker; storing time.Now() compared a future wall-clock time
-			// against Jira's historical updated_time, so the cache never went
-			// stale after a sync.
-			if dbUpdatedAt, luErr := svc.repository.GetProjectLastUpdated(
-				ctx,
-				projectID,
-			); luErr == nil {
-				_ = svc.cache.SetLastUpdated(ctx, projectID, dbUpdatedAt)
-			}
-		}
+		storeInCache(ctx, svc, projectID, dataType, result)
 
 		return result, nil
 	})
@@ -341,6 +327,33 @@ func fetchWithCache[T any]( //nolint:ireturn
 	}
 
 	return sfResult.(T), nil //nolint:forcetypeassert
+}
+
+// storeInCache marshals result and writes it to the cache together with the
+// DB's last-updated marker (MAX(updated_time)), not the wall clock.
+// isCacheStale compares this marker against the current DB marker; storing
+// time.Now() compared a future wall-clock time against Jira's historical
+// updated_time, so the cache never went stale after a sync.
+func storeInCache[T any](
+	ctx context.Context,
+	svc *Service,
+	projectID int,
+	dataType string,
+	result T,
+) {
+	data, marshalErr := json.Marshal(result)
+	if marshalErr != nil {
+		return
+	}
+
+	_ = svc.cache.Set(ctx, projectID, dataType, data)
+
+	dbUpdatedAt, luErr := svc.repository.GetProjectLastUpdated(ctx, projectID)
+	if luErr != nil {
+		return
+	}
+
+	_ = svc.cache.SetLastUpdated(ctx, projectID, dbUpdatedAt)
 }
 
 func marshalResult[T any](val T, err error) ([]byte, error) { //nolint:ireturn
