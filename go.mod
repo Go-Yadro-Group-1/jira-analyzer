@@ -6,6 +6,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
+	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.11.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
