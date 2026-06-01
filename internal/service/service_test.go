@@ -132,6 +132,7 @@ func TestGetChart_CacheHit(t *testing.T) {
 		repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 			Return([]repository.IssueDuration{{IssueID: 1, Duration: hour}}, nil),
 		cache.EXPECT().Set(gomock.Any(), 1, gomock.Any(), gomock.Any()).Return(nil),
+		repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(dbTime, nil),
 		cache.EXPECT().SetLastUpdated(gomock.Any(), 1, gomock.Any()).Return(nil),
 		repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(dbTime, nil),
 		cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(dbTime, nil),
@@ -165,7 +166,8 @@ func TestGetChart_StaleCache(t *testing.T) {
 	staleData, err := json.Marshal(service.IssuesDurationHistogram{Bars: nil})
 	require.NoError(t, err)
 
-	repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(dbTime, nil)
+	// Called twice: once in isCacheStale, once when storing the cache marker.
+	repo.EXPECT().GetProjectLastUpdated(gomock.Any(), 1).Return(dbTime, nil).Times(2)
 	cache.EXPECT().GetLastUpdated(gomock.Any(), 1).Return(cacheTime, nil)
 	repo.EXPECT().GetIssuesDurationByProject(gomock.Any(), 1).
 		Return([]repository.IssueDuration{{IssueID: 1, Duration: 2 * hour}}, nil)

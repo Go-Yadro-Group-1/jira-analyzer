@@ -321,7 +321,17 @@ func fetchWithCache[T any]( //nolint:ireturn
 		data, marshalErr := json.Marshal(result)
 		if marshalErr == nil {
 			_ = svc.cache.Set(ctx, projectID, dataType, data)
-			_ = svc.cache.SetLastUpdated(ctx, projectID, time.Now())
+			// Store the DB's last-updated marker (MAX(updated_time)), not the
+			// wall clock. isCacheStale compares this against the current DB
+			// marker; storing time.Now() compared a future wall-clock time
+			// against Jira's historical updated_time, so the cache never went
+			// stale after a sync.
+			if dbUpdatedAt, luErr := svc.repository.GetProjectLastUpdated(
+				ctx,
+				projectID,
+			); luErr == nil {
+				_ = svc.cache.SetLastUpdated(ctx, projectID, dbUpdatedAt)
+			}
 		}
 
 		return result, nil
