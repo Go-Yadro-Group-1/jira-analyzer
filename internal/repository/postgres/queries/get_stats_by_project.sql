@@ -5,7 +5,7 @@ WITH issue_stats AS (
         COUNT(*) FILTER (WHERE status = 'Closed') AS count_closed,
         COUNT(*) FILTER (WHERE status = 'Resolved') AS count_resolved,
         COUNT(*) FILTER (WHERE status = 'In Progress') AS count_in_progress,
-        COALESCE(SUM(EXTRACT(EPOCH FROM (closed_time - created_time))), 0)::INT AS total_duration_closed,
+        COALESCE(SUM(EXTRACT(EPOCH FROM (closed_time - created_time))), 0)::BIGINT AS total_duration_closed,
         COUNT(*) FILTER (WHERE created_time >= NOW() - INTERVAL '7 days') AS count_created_last_week
     FROM raw.issue
     WHERE project_id = $1

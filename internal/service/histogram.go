@@ -1,14 +1,11 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 
 	"github.com/Go-Yadro-Group-1/Jira-Analyzer/internal/repository"
 )
-
-var ErrNoHistogramData = errors.New("no closed issues to build histogram")
 
 const (
 	secondsInHour  = 3600
@@ -86,9 +83,15 @@ func barIndexToSeconds(idx int) int64 {
 	}
 }
 
+// The error return is retained for signature symmetry with the histogram
+// builders that propagate it into the fetchWithCache (T, error) chain.
+//
+//nolint:unparam // empty input is a valid empty result, so err is always nil here
 func buildMultiScaleHistogram(durations []int64) ([]HistogramBar, error) {
 	if len(durations) == 0 {
-		return nil, ErrNoHistogramData
+		// No data is a valid empty histogram, not an error: a project may have
+		// no closed issues (or no time logged) yet still render an empty chart.
+		return []HistogramBar{}, nil
 	}
 
 	var counts [totalBars]int
@@ -151,7 +154,9 @@ func buildIssuesTimeSpentHistogram(
 
 func buildStatusHistograms(rows []repository.StatusTransition) ([]StatusHistogram, error) {
 	if len(rows) == 0 {
-		return nil, ErrNoHistogramData
+		// No transitions yet: return an empty (not error) result so the chart
+		// renders as empty instead of failing the RPC.
+		return []StatusHistogram{}, nil
 	}
 
 	byIssue := make(map[int][]repository.StatusTransition)
