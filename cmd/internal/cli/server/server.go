@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,7 +90,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	defer conn.Close()
 
-	metricsSrv := startMetricsServer(cfg.Metrics.Port, mtr, log)
+	metricsSrv := startMetricsServer(resolveHTTPPort(cfg.Metrics.Port), mtr, log)
 	defer shutdownMetricsServer(metricsSrv, log)
 
 	err = startServer(cmd, conn, log, mtr)
@@ -105,11 +106,41 @@ const (
 	metricsReadTimeout     = 5 * time.Second
 )
 
+// resolveHTTPPort returns the port the metrics/health HTTP server should bind
+// to. Managed platforms (e.g. Timeweb App Platform) inject the public port via
+// $PORT and probe its HTTP health path; honor it when set, otherwise fall back
+// to the configured metrics port.
+func resolveHTTPPort(fallback int) int {
+	p := os.Getenv("PORT")
+	if p == "" {
+		return fallback
+	}
+
+	n, err := strconv.Atoi(p)
+	if err != nil {
+		return fallback
+	}
+
+	return n
+}
+
 func startMetricsServer(port int, mtr *metrics.Metrics, log *slog.Logger) *http.Server {
 	handlerOpts := promhttp.HandlerOpts{Registry: mtr.Registry} //nolint:exhaustruct
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.HandlerFor(mtr.Registry, handlerOpts))
+
+	// HTTP health endpoint for platform health checks (e.g. Timeweb App
+	// Platform), which probe an HTTP path but cannot check the gRPC port. The
+	// catch-all "/" also returns 200 so a default health path works out of the
+	// box.
+	health := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}
+	mux.HandleFunc("/health", health)
+	mux.HandleFunc("/healthz", health)
+	mux.HandleFunc("/", health)
 
 	srv := &http.Server{ //nolint:exhaustruct
 		Addr:              fmt.Sprintf(":%d", port),
