@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -93,6 +94,16 @@ func run(cmd *cobra.Command, _ []string) error {
 	metricsSrv := startMetricsServer(resolveHTTPPort(cfg.Metrics.Port), mtr, log)
 	defer shutdownMetricsServer(metricsSrv, log)
 
+	if cfg.Pprof.Enabled {
+		pprofAddr := cfg.Pprof.Addr
+		if pprofAddr == "" {
+			pprofAddr = ":6060"
+		}
+
+		pprofSrv := startPprofServer(pprofAddr, log)
+		defer shutdownPprofServer(pprofSrv, log)
+	}
+
 	err = startServer(cmd, conn, log, mtr)
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
@@ -167,6 +178,45 @@ func shutdownMetricsServer(srv *http.Server, log *slog.Logger) {
 	err := srv.Shutdown(shutdownCtx)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Warn("metrics server shutdown", slog.String("error", err.Error()))
+	}
+}
+
+// startPprofServer starts a dedicated net/http/pprof server on the given addr.
+// pprof handlers are registered on a private mux — never on DefaultServeMux —
+// so they are never accidentally exposed through other HTTP servers.
+func startPprofServer(addr string, log *slog.Logger) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	srv := &http.Server{ //nolint:exhaustruct
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: metricsReadTimeout,
+	}
+
+	go func() {
+		log.Info("starting pprof server", slog.String("addr", srv.Addr))
+
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("pprof server failed", slog.String("error", err.Error()))
+		}
+	}()
+
+	return srv
+}
+
+func shutdownPprofServer(srv *http.Server, log *slog.Logger) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), metricsShutdownTimeout)
+	defer cancel()
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Warn("pprof server shutdown", slog.String("error", err.Error()))
 	}
 }
 

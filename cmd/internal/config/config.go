@@ -11,6 +11,7 @@ type Config struct {
 	DB      DBConfig      `mapstructure:"db"      validate:"required"`
 	App     AppConfig     `mapstructure:"app"     validate:"required"`
 	Metrics MetricsConfig `mapstructure:"metrics" validate:"required"`
+	Pprof   PprofConfig   `mapstructure:"pprof"`
 }
 
 type DBConfig struct {
@@ -28,6 +29,14 @@ type AppConfig struct {
 
 type MetricsConfig struct {
 	Port int `mapstructure:"port" validate:"required,min=1,max=65535"`
+}
+
+// PprofConfig controls the optional net/http/pprof diagnostic server.
+// Defaults: enabled=false, addr=":6060". Not marked validate:"required" so
+// an absent pprof block in YAML is fine — the server simply does not start.
+type PprofConfig struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Addr    string `mapstructure:"addr"`
 }
 
 //nolint:gochecknoglobals
@@ -50,6 +59,8 @@ func BindEnvs() error {
 		"db.sslmode":    "DB_SSLMODE",
 		"app.log_level": "LOG_LEVEL",
 		"metrics.port":  "METRICS_PORT",
+		"pprof.enabled": "PPROF_ENABLED",
+		"pprof.addr":    "PPROF_ADDR",
 	}
 
 	for key, env := range binds {

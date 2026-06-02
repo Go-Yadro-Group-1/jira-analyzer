@@ -19,7 +19,7 @@ COPY --from=builder /out/analyzer ./analyzer
 COPY migrations ./migrations
 COPY config ./config
 
-EXPOSE 50051 9090
+EXPOSE 50051 9090 6060
 
 ENTRYPOINT ["./analyzer"]
 CMD ["serve", "--config", "config/docker.yaml", "--host", "0.0.0.0", "--port", "50051"]
